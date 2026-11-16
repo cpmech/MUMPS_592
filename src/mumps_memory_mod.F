@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: made the byte-size module variables compile-time PARAMETER
+C          constants, removing the race in MUMPS_MEMORY_SET_DATA_SIZES.
+C          No public interface changed.
+C  =============================================================================
+C
       MODULE MUMPS_MEMORY_MOD
       INTERFACE MUMPS_DEALLOC
       MODULE PROCEDURE MUMPS_IDEALLOC
@@ -20,21 +28,15 @@ C
       MODULE PROCEDURE MUMPS_DREALLOC, MUMPS_SREALLOC, MUMPS_ZREALLOC
       MODULE PROCEDURE MUMPS_CREALLOC
       END INTERFACE
-      INTEGER(8), PRIVATE :: ISIZE, I8SIZE, SSIZE, DSIZE, CSIZE, ZSIZE
+C     Byte sizes for the default integer, REAL, COMPLEX, and INTEGER(8)
+C     kinds (LP64 build, i.e. without -i8).
+      INTEGER(8), PARAMETER, PRIVATE ::
+     &  ISIZE = 4_8, I8SIZE = 8_8,
+     &  SSIZE = 4_8, DSIZE = 8_8, CSIZE = 8_8, ZSIZE = 16_8
       CONTAINS
       SUBROUTINE MUMPS_MEMORY_SET_DATA_SIZES()
-      INTEGER             :: I(2)
-      INTEGER(8)          :: I8(2)
-      REAL(kind(1.e0))    :: S(2)
-      REAL(kind(1.d0))    :: D(2)
-      COMPLEX(kind(1.e0)) :: C(2)
-      COMPLEX(kind(1.d0)) :: Z(2)
-      CALL MUMPS_SIZE_C(I (1), I (2), ISIZE) 
-      CALL MUMPS_SIZE_C(S (1), S (2), SSIZE) 
-      CALL MUMPS_SIZE_C(D (1), D (2), DSIZE) 
-      CALL MUMPS_SIZE_C(C (1), C (2), CSIZE) 
-      CALL MUMPS_SIZE_C(Z (1), Z (2), ZSIZE) 
-      CALL MUMPS_SIZE_C(I8(1), I8(2), I8SIZE) 
+C     The data sizes are compile-time PARAMETER constants now; this
+C     routine is kept for call compatibility and has nothing to set.
       RETURN
       END SUBROUTINE MUMPS_MEMORY_SET_DATA_SIZES
       SUBROUTINE MUMPS_IREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,

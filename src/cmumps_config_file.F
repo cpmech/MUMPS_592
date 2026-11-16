@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: removed SAVE-hazard initializers from local character variables
+C          (blank initialisations moved into the executable part). No public
+C          interface changed.
+C  =============================================================================
+C
       MODULE CMUMPS_CONFIG_FILE
       USE CMUMPS_STRUC_DEF
       IMPLICIT NONE
@@ -23,15 +31,18 @@ C
       CHARACTER(len=1096)::LINE   
       CHARACTER:: CHARCOM
       INTEGER :: LINE_size,IERR
-      CHARACTER(len=15)::PARAM=' '
-      CHARACTER(len=10)::INDICE=' '
-      CHARACTER(len=1024)::VAL=' ' 
+      CHARACTER(len=15)::PARAM
+      CHARACTER(len=10)::INDICE
+      CHARACTER(len=1024)::VAL
       INTEGER :: LENVAL
       INTEGER :: unit_config
       INTEGER :: i1,ind_first_par,ind_second_par,ind_equal,line_number
       INTEGER :: LP,ind_end
       LOGICAL :: LPOK, IS_CONFIG_FILE_OPEN
       TYPE(CMUMPS_STRUC) id
+      PARAM  = ' '
+      INDICE = ' '
+      VAL    = ' '
       LP    = id%ICNTL(1)
       LPOK  = (LP.GT.0) .AND. (id%ICNTL(4).GE.1)
       IS_CONFIG_FILE_OPEN = .FALSE.
