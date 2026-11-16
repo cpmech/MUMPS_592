@@ -140,8 +140,11 @@ stop condition.
 Every probe can be built and run against the installed library today; §8 covers building this tree
 once the source changes.
 
-1. A standalone C reproducer (no Rust): N threads × the installed stock library, confirming both
-   failure classes; record exit codes, `dmesg`/journal lines and the faulting offset.
+1. A standalone reproducer, no Rust: `examples/dorival_thread_safe.F` already does it (its header
+   documents the flags; without a lock it fails 12/12 runs of 2 and 8 threads with a `SIGSEGV`, an
+   allocatable-array abort or `INFOG(1) = -13`, and with a lock around the whole cycle it passes
+   6/6). Confirm both failure classes against the installed stock library, record exit codes,
+   `dmesg`/journal lines and the faulting offset.
 2. Does `ICNTL(48)=0` (no L0 tree parallelism) remove the `OMP ≥ 13` failure with many caller threads?
    Does `ICNTL(16)=1`? Does `ICNTL(16)=k` fixed per instance change the threshold?
 3. Is the threshold driven by instances, caller threads, or `N_threads × OMP`? Does a caller thread
