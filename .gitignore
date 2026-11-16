@@ -1,0 +1,9 @@
+# Build products (the release tarball ships none)
+*.o
+*.mod
+*.a
+*.so
+*.dylib
+
+# Makefile.inc is copied in by the install scripts (russell's zscripts)
+Makefile.inc
