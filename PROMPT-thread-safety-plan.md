@@ -4,7 +4,7 @@ You are a senior numerical-software engineer with Fortran, OpenMP, MPI and spars
 experience. Your task is to **design a plan**, not to implement it: make MUMPS 5.9.2 safe to call
 concurrently from several threads of one process, well enough that a client library can stop
 serializing every MUMPS call onto a single dedicated thread. Read the whole brief before starting,
-then produce the deliverable in §8.
+then produce the deliverable in §9.
 
 ## 1. Why this work exists
 
@@ -132,10 +132,13 @@ stop condition.
   behind the capability check; stock MUMPS keeps the worker.
 - **American English**, and **every claim about MUMPS internals carries `file:line`**. No invented
   function or module names.
-- **Design only.** Do not edit this tree; build probes in a `/tmp` copy. Do not touch `pmsim` or
-  `russell` — a client-side change is not the fix.
+- **Design only.** Do not edit this tree; build probes from the `/tmp` copy that `build.bash` makes
+  (see §8). Do not touch `pmsim` or `russell` — a client-side change is not the fix.
 
 ## 7. Probes worth running first (cheap, and they decide the design)
+
+Every probe can be built and run against the installed library today; §8 covers building this tree
+once the source changes.
 
 1. A standalone C reproducer (no Rust): N threads × the installed stock library, confirming both
    failure classes; record exit codes, `dmesg`/journal lines and the faulting offset.
@@ -149,7 +152,41 @@ stop condition.
    `set_tmp_ptr`/`assign_colsca` paths exercised by an assembled-matrix run?
 6. Scope of the existing OpenMP locks (`dmumps_ooc.F`, `dsol_fwd_aux.F`): per instance or per process?
 
-## 8. Deliverable
+## 8. Building this tree
+
+**A compiled 5.9.2 is already installed**, in `/usr/local/lib/mumps` and `/usr/local/include/mumps`
+(built from this upstream release with the same build files: `PLAT = _cpmech`, s/d/c/z, static and
+shared). The reproducer of §7 can be written, compiled and run today against that library, without
+building anything first.
+
+**`build.bash` in this directory compiles the checkout** for when the source changes:
+
+```bash
+./build.bash                         # Intel oneAPI (ifx/icx) + MKL, the workstation default
+./build.bash 0                       # gfortran/Clang + system BLAS and LAPACK
+PREFIX=/tmp/mumps-probe BUILD_DIR=/tmp/mumps-build LDCONFIG=0 ./build.bash
+```
+
+It copies the working tree to `${BUILD_DIR:-/tmp}/MUMPS_<version>`, so uncommitted edits are what
+gets built and the checkout stays clean; selects `zscripts/MakefileMKL.inc` or
+`zscripts/Makefile.inc` as `Makefile.inc`; builds `d`, `dshared`, `z`, `zshared` with `make clean`
+between them; and installs the libraries and the headers under `${PREFIX:-/usr/local}` (registering
+the directory with `ldconfig` only for `/usr/local`). `KEEP_BUILD=1` leaves the `/tmp` copy for
+inspection after a successful install.
+
+Points that matter for a probe:
+
+- **Do not install a probe build over `/usr/local`.** Use a scratch prefix, link against
+  `-L/tmp/mumps-probe/lib/mumps`, and run with `LD_LIBRARY_PATH=/tmp/mumps-probe/lib/mumps`. The
+  stock install is the reference the client stack (`russell_sparse`, `pmsim`) links against, and
+  leaving it untouched means a crash can be reproduced against the unmodified library at any time.
+- **Headers must come from a finished build:** every client header includes the generated
+  `mumps_int_def.h`, and `make clean` deletes it. `build.bash` copies the headers before its last
+  clean; a manual `make` has to do the same.
+- A full build is the four variants and takes a few minutes, so build once per round of source
+  changes, not once per probe.
+
+## 9. Deliverable
 
 One Markdown file, `PLAN-thread-safety.md`, in this directory (`~/01-Code/fortran/MUMPS_5.9.2/`),
 with:
@@ -176,11 +213,13 @@ with:
 Then give a ≤300-word summary in chat: the recommended design, its effort, the first three things to
 verify, and any question that is genuinely the owner's to answer (numbered).
 
-## 9. Inputs
+## 10. Inputs
 
-- MUMPS source: `~/01-Code/fortran/MUMPS_5.9.2` (pristine tarball, not a git repo; 25 MB, 492 files
-  in `src/`; `doc/userguide_5.9.2.pdf`; `libseq/`; `PORD/`).
-- Installed library and headers: `/usr/local/lib/mumps`, `/usr/local/include/mumps`.
+- MUMPS source: `~/01-Code/fortran/MUMPS_5.9.2` — git repository on `main`, the upstream 5.9.2
+  tarball as the first commit plus `build.bash` and `zscripts/`; 25 MB, 492 files in `src/`;
+  `doc/userguide_5.9.2.pdf`; `libseq/`; `PORD/`.
+- Installed library and headers: `/usr/local/lib/mumps`, `/usr/local/include/mumps` — the compiled
+  stock 5.9.2 the client stack links against (§8).
 - Client: `~/01-Code/rust/russell` — `russell_sparse/src/mumps_lock.rs` (the worker, 208 lines),
   `russell_sparse/c_code/interface_mumps.c` and `interface_complex_mumps.c`,
   `russell_sparse/tests/test_mumps.rs`, `zscripts/*-compile-mumps.bash`,
@@ -190,7 +229,7 @@ verify, and any question that is genuinely the owner's to answer (numbered).
   `~/03-Writings/ObsidianVault/Note-Mumps-Thread-Safety.md` and
   `~/03-Writings/ObsidianVault/Plan-Mumps-Thread-Safety.md`.
 
-## 10. Do not
+## 11. Do not
 
 - Do not present "wrap it in a mutex" as the solution — a client mutex already exists and does not
   fix failure class 2.
