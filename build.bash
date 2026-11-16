@@ -20,6 +20,10 @@
 #
 #     PREFIX       installation prefix (default /usr/local)
 #     BUILD_DIR    directory that holds the build copy (default /tmp)
+#     TARGETS      what to build, from d, dshared, z, zshared (default: all four); a probe that
+#                  only calls dmumps_c needs "d dshared" (about 40 s, the shared libraries a C
+#                  probe links) or "d" alone if the probe is linked with ifx against the archives
+#     JOBS         make jobs (default 8)
 #     KEEP_BUILD   1 keeps the build copy after installation
 #
 # Examples:
@@ -27,6 +31,7 @@
 #     ./build.bash                                  # /usr/local, MKL (asks for sudo)
 #     PREFIX=$HOME/mumps ./build.bash               # a private install, no sudo
 #     BUILD_DIR=$HOME/tmp ./build.bash 0            # gfortran/OpenBLAS, build in $HOME/tmp
+#     TARGETS="d dshared" ./build.bash               # the real arithmetics, enough for a probe
 #
 set -euo pipefail
 
@@ -42,8 +47,26 @@ esac
 SRC="$(cd "$(dirname "$0")" && pwd)"
 PREFIX="${PREFIX:-/usr/local}"
 BUILD_DIR="${BUILD_DIR:-/tmp}"
+TARGETS="${TARGETS:-d dshared z zshared}"
+JOBS="${JOBS:-8}"
 INCDIR="$PREFIX/include/mumps"
 LIBDIR="$PREFIX/lib/mumps"
+
+case "$JOBS" in
+    ''|*[!0-9]*|0)
+        echo "error: JOBS must be a positive integer (got '$JOBS')" >&2
+        exit 1
+        ;;
+esac
+for target in $TARGETS; do
+    case "$target" in
+        d|z|dshared|zshared) ;;
+        *)
+            echo "error: unknown target '$target' in TARGETS (use d, dshared, z or zshared)" >&2
+            exit 1
+            ;;
+    esac
+done
 
 # Version from the file that the release ships; the same string is compared at run time by
 # libmumps against the headers the client compiled with.
@@ -131,28 +154,28 @@ $SUDO mkdir -p "$LIBDIR" "$INCDIR"
 
 # One target per arithmetic and linkage: the top-level Makefile is not reentrant across
 # targets (object files are not recompiled when only the output target changes), so each
-# build starts from a clean tree.
+# build starts from a clean tree. The targets are independent of each other, so TARGETS can
+# take a subset; "d" builds the two real arithmetics, "z" the two complex ones.
 cd "$WORK"
 build_variant () {
     local target="$1" ext="$2"
-    echo "... make $target"
-    make "$target"
+    echo "... make -j$JOBS $target"
+    make -j"$JOBS" "$target"
     $SUDO cp -av lib/lib*"$ext" "$LIBDIR/"
+    # The headers go in while the tree is built: mumps_int_def.h is generated into include/
+    # by every build and removed by make clean (src/Makefile), and every client header
+    # includes it in turn.
+    $SUDO cp -av include/*.h "$INCDIR/"
 }
 
-build_variant d .a            # double precision, static
-make clean
-build_variant dshared .so     # double precision, shared
-make clean
-build_variant z .a            # complex (double), static
-make clean
-build_variant zshared .so     # complex (double), shared
-
-# The headers go in before cleaning the last build: mumps_int_def.h is generated into
-# include/ by every build and removed by make clean (src/Makefile), and mumps_c_types.h,
-# which every client header includes, includes it in turn.
-$SUDO cp -av include/*.h "$INCDIR/"
-make clean
+for target in $TARGETS; do
+    case "$target" in
+        d|z) ext=.a ;;
+        *) ext=.so ;;
+    esac
+    build_variant "$target" "$ext"
+    make clean
+done
 
 # Register the library directory with the dynamic linker when installing system-wide.
 if [ "$PREFIX" = "/usr/local" ] && [ "${LDCONFIG:-1}" != 0 ]; then

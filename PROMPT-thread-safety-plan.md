@@ -171,7 +171,8 @@ It copies the working tree to `${BUILD_DIR:-/tmp}/MUMPS_<version>`, so uncommitt
 gets built and the checkout stays clean; selects `zscripts/MakefileMKL.inc` or
 `zscripts/Makefile.inc` as `Makefile.inc`; builds `d`, `dshared`, `z`, `zshared` with `make clean`
 between them; and installs the libraries and the headers under `${PREFIX:-/usr/local}` (registering
-the directory with `ldconfig` only for `/usr/local`). `KEEP_BUILD=1` leaves the `/tmp` copy for
+the directory with `ldconfig` only for `/usr/local`). `TARGETS` selects a subset of the four,
+`JOBS` sets the make parallelism (default 8), and `KEEP_BUILD=1` leaves the `/tmp` copy for
 inspection after a successful install.
 
 Points that matter for a probe:
@@ -183,8 +184,13 @@ Points that matter for a probe:
 - **Headers must come from a finished build:** every client header includes the generated
   `mumps_int_def.h`, and `make clean` deletes it. `build.bash` copies the headers before its last
   clean; a manual `make` has to do the same.
-- A full build is the four variants and takes a few minutes, so build once per round of source
-  changes, not once per probe.
+- **Rebuilds are cheap and always clean.** The script copies the tree anew, so there are no stale
+  objects and no incremental-make risk (MUMPS's Fortran modules make a partial rebuild unsafe). With
+  `make -j8` the four variants take about 75 s here, and `TARGETS="d dshared" ./build.bash` — the loop
+  for a probe that calls `dmumps_c` — takes about 40 s; `JOBS` raises the parallelism.
+- **A C probe links the shared libraries**: the static archives are Intel Fortran objects, and a
+  plain `gcc` link fails on the Fortran runtime (`for_write_seq_lis`, …). Build `dshared` and link
+  the `.so`, or build the probe with `ifx` if it is to use the archives.
 
 ## 9. Deliverable
 
