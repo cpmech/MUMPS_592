@@ -2,7 +2,7 @@
 
 ## 1. Status
 
-`Status:` **Proposed — root-cause analysis and runtime probes complete (2026-11-17); Phase 0 in progress.** Phase 0 dispatched to Kleo on branch `ts-phase0` from `main` `d7b6b1f` (brief at `/home/dorival/.hermes/profiles/ada/cache/scratch/brief-kleo-mumps-phase0.md`); Ada reviews. Local workspace state: [PLAN-thread-safety.md](file:///home/dorival/01-Code/fortran/MUMPS_5.9.2/PLAN-thread-safety.md) added on branch `main` over commit `2da3511fce243579b55b85218e52f92f9184f499`. No MUMPS source files, `pmsim` files, or `russell` files have been modified.
+`Status:` **Proposed — root-cause analysis and runtime probes complete (2026-11-17); Decisions 1–4 approved; Phase 0 in progress.** Approved 2026-11-17: Decision 1 = Option 1e (Phase 0+1 first, Phase 2 after, gated on the reproducer), Decision 2 = capability symbol, Decision 3 = Option B (Fortran entry routed too), Decision 4 = env-overridable `MUMPS_NUM_WORKERS` with the default set by measurement. Phase 0 dispatched to Kleo on branch `ts-phase0` from `main` `d7b6b1f` (brief at `/home/dorival/.hermes/profiles/ada/cache/scratch/brief-kleo-mumps-phase0.md`); Ada reviews. Local workspace state: [PLAN-thread-safety.md](file:///home/dorival/01-Code/fortran/MUMPS_5.9.2/PLAN-thread-safety.md) added on branch `main` over commit `2da3511fce243579b55b85218e52f92f9184f499`. No MUMPS source files, `pmsim` files, or `russell` files have been modified.
 
 ---
 
@@ -232,18 +232,29 @@ Owners can approve or adjust the design by answering Decisions 1 through 4 by nu
 
 **Recommendation for Decision 1:** Adopt **Option 1e** (implementing Phase 0 + Phase 1 first at **1.5 person-weeks**, then Phase 2 at **+4.5 person-weeks**). Fallback if `pmsim` rarely solves independent instances simultaneously: stop cleanly after **Phase 1** (1.5 pw), which already deletes `russell_sparse/src/mumps_lock.rs`.
 
+**Approved (2026-11-17, by number): Option 1e.** Phase 0+1 proceed, Phase 2 follows only if the concurrent work is wanted; each phase is gated on the reproducer and the integration suite, and the person-week figures are the plan's estimates, not a gate.
+
 ### Decision 2 — ABI Capability Detection Symbol
 - Expose `int mumps_is_thread_safe(void)` in `libmumps_common_cpmech.{a,so}` (returning `1` in Phase 1, `2` in Phase 2) and `#define MUMPS_THREAD_SAFE_VERSION` in `include/mumps_c_types.h`.
 - **Recommendation:** Approve (zero change to `DMUMPS_STRUC_C`).
+- **Approved (2026-11-17).** Implement `mumps_is_thread_safe()` in `libmumps_common` and
+  `MUMPS_THREAD_SAFE_VERSION` in `include/mumps_c_types.h`; `DMUMPS_STRUC_C` unchanged.
 
 ### Decision 3 — Fortran Direct Entry (`dorival_thread_safe.F`) vs. C-Entry Only (`[sdcz]mumps_c`)
 - Option A: Intercept only `[sdcz]mumps_c` (protects all C/Rust clients; direct Fortran callers `CALL DMUMPS(ID)` run unlocked unless reentrant in Phase 2).
 - Option B: Route both `[sdcz]mumps_c` AND Fortran `[SDCZ]MUMPS` (`src/[sdcz]mumps_driver.F` renamed internally to `[SDCZ]MUMPS_IMPL`, with `[SDCZ]MUMPS` calling the C worker dispatcher via `ISO_C_BINDING`) through the persistent pool.
 - **Recommendation:** Approve **Option B** (+0.2 pw included in Phase 1) so `examples/dorival_thread_safe.F` (`locked=0`) passes out of the box alongside C/Rust callers.
 
+- **Approved (2026-11-17): Option B.** `examples/dorival_thread_safe.F` with `locked=0` is an
+  acceptance test for Phase 1; a client lock must not be needed for either entry point.
+
 ### Decision 4 — Phase 2 Concurrency Pool Width ($K$)
 - Set default persistent worker count $K = \max(1, \min(8, N_{\text{cpus}} / \text{OMP\_NUM\_THREADS}))$ overridable via `MUMPS_NUM_WORKERS`, and automatically clamp per-worker `omp_set_num_threads` or keep user `OMP_NUM_THREADS` if `MUMPS_NUM_WORKERS` is explicitly tuned so total `libiomp5` `gtid`s stay far below 128 (`<= 32..64`). Note that calls already running on a Rayon thread whose `OMP=1` (e.g. `pmsim` tiny 192-dof tests) could alternatively fast-path when $K=N$ reentrant, except `libiomp5` teardown safety still favors the persistent $K$-worker pool.
 - **Recommendation:** Approve default $K = 4$ (when `OMP_NUM_THREADS <= 8`) / auto-scaled, env-overridable via `MUMPS_NUM_WORKERS`.
+
+- **Approved (2026-11-17):** `MUMPS_NUM_WORKERS` env override and `mumps_set_num_workers(int)`; the
+  default $K$ is set by the Phase 2 measurement (the target is the $\ge 4\times$ concurrent speedup,
+  with $K \times \text{OMP} \le 64$), not fixed at 4 now.
 
 ---
 
@@ -417,15 +428,17 @@ OMP_NUM_THREADS=4 MUMPS_NUM_WORKERS=8 ./c_concurrent_3d_bench
 | **MUMPS Fortran runtime state / I/O unit collisions** (if two Phase 2 workers log to `ICNTL(1..4)` Fortran units simultaneously). | Medium | Keep default quiet units or protect unit allocation (`MUMPS_FIND_UNIT` in `src/tools_common.F`) with a C mutex when error/diagnostic printing is enabled. |
 | **Internal `DMUMPS_INTR_STRUC` layout growth** in Phase 2 (`src/[sdcz]mumps_intr_types.F:56-65`). | Low | `DMUMPS_INTR_STRUC` is private Fortran storage serialized via `id%INTR_ENCODING`; public C struct `DMUMPS_STRUC_C` (`include/[sdcz]mumps_c.h`) never changes layout. |
 
-### 12.2 Numbered Open Questions for Owner Decision
+### 12.2 Owner Decisions (answered 2026-11-17 — all four taken as recommended, see §6)
 
 1. **Stopping Gate (Phase 1 vs. Phase 2):** Approve **Option 1e** executing **Phase 0 + Phase 1** first (**1.5 person-weeks**) to eliminate client-side locking in `russell_sparse`, and decide whether **Phase 2** (**+4.5 person-weeks**, **6.0 person-weeks total**) should follow immediately for concurrent multi-instance speedup in `pmsim`.
 2. **Fortran Entry Point Routing:** In Phase 1, should direct Fortran calls (`CALL DMUMPS(id)` as in `examples/dorival_thread_safe.F`) also route through `libmumps_common`'s persistent worker dispatcher (Option B, recommended), or only C/Rust calls (`[sdcz]mumps_c`)?
 3. **Phase 2 OOC Serialization Policy:** Given that `russell_sparse` and `pmsim` run strictly in-core (`ICNTL(22)=0`), confirm that serializing OOC (`ICNTL(22)=1`) and Save/Restore (`JOB=7,8,-3`) on Worker 0 under a mutex in Phase 2 is acceptable.
 4. **Target `MUMPS_NUM_WORKERS` Default for Phase 2:** Confirm default $K = 4$ (or $\min(8, N_{\text{cpus}} / \text{OMP\_NUM\_THREADS})$) overridable via `MUMPS_NUM_WORKERS` environment variable and `mumps_set_num_workers(int)`.
 
+**Answer (2026-11-17):** all four approved as recommended — (1) Option 1e with Phase 0+1 first, (2) capability symbol, (3) Option B, (4) env override with the default set by measurement.
+
 ### 12.3 Kanban
 
 | Done | In Progress | Backlog |
 | :--- | :--- | :--- |
-| - Complete static/`SAVE`/`COMMON`/`THREADPRIVATE` inventory (`nm -A` + source audit across `src/`, `libseq/`, `PORD/`, `libmetis.so`, `libGKlib.so`).<br>- Disassembly & root-cause verification of Fault 1a (`dmumps_f77_` at `0x274520`), Fault 1b/c (`MUMPS_STATIC_MAPPING`, `MUMPS_LOAD`, `mumps_c.c`, `mumps_common.c`, `DMUMPS_TMP_PTR`), Fault 2a (`DMUMPS_SOL_L0OMP_R` `__kmpc_threadprivate_cached`), and Fault 2b (`__kmp_reap_worker`).<br>- All 6 verification probes completed.<br>- Authored `PLAN-thread-safety.md`. | - **Phase 0 (0.5 pw), Kleo:** branch `ts-phase0` from `main` `d7b6b1f`, Ada reviewing; items 1–4 of §7; gate = zero symbols in the §9.1 audit, the five example runs and `test_mumps` green. | - Owner answers to Questions 1–4 (Decisions 1–4, §6).<br>- **Phase 1 (1.0 pw, blocked on `GO-PHASE-1`):** Implement `src/mumps_thread_safe.c` persistent OpenMP master worker + `mumps_is_thread_safe()` symbol; pass 20/20 `dorival_thread_safe`, C pthread churn, `russell_sparse`, and `pmsim` gates; patch `russell_sparse/build.rs` behind `#[cfg(mumps_thread_safe)]`.<br>- **Phase 2 (4.5 pw):** Encapsulate `MUMPS_STATIC_MAPPING`, `MUMPS_LOAD`, buffers, `FDM_F`, `LOCK_FOR_SCATTER`, `sol_aux.F`, & BLR state into `idintr`/TLS; enable $K$-worker pool + OOC mutex; verify $\ge 4\times$ concurrent speedup. |
+| - Complete static/`SAVE`/`COMMON`/`THREADPRIVATE` inventory (`nm -A` + source audit across `src/`, `libseq/`, `PORD/`, `libmetis.so`, `libGKlib.so`).<br>- Disassembly & root-cause verification of Fault 1a (`dmumps_f77_` at `0x274520`), Fault 1b/c (`MUMPS_STATIC_MAPPING`, `MUMPS_LOAD`, `mumps_c.c`, `mumps_common.c`, `DMUMPS_TMP_PTR`), Fault 2a (`DMUMPS_SOL_L0OMP_R` `__kmpc_threadprivate_cached`), and Fault 2b (`__kmp_reap_worker`).<br>- All 6 verification probes completed.<br>- Authored `PLAN-thread-safety.md`.<br>- Owner decisions 1–4 answered 2026-11-17 (Option 1e, capability symbol, Option B, env-overridable `MUMPS_NUM_WORKERS`). | - **Phase 0 (0.5 pw), Kleo:** branch `ts-phase0` from `main` `d7b6b1f`, Ada reviewing; items 1–4 of §7; gate = zero symbols in the §9.1 audit, the five example runs and `test_mumps` green. | - **Phase 1 (1.0 pw, blocked on `GO-PHASE-1`):** Implement `src/mumps_thread_safe.c` persistent OpenMP master worker + `mumps_is_thread_safe()` symbol; pass 20/20 `dorival_thread_safe`, C pthread churn, `russell_sparse`, and `pmsim` gates; patch `russell_sparse/build.rs` behind `#[cfg(mumps_thread_safe)]`.<br>- **Phase 2 (4.5 pw):** Encapsulate `MUMPS_STATIC_MAPPING`, `MUMPS_LOAD`, buffers, `FDM_F`, `LOCK_FOR_SCATTER`, `sol_aux.F`, & BLR state into `idintr`/TLS; enable $K$-worker pool + OOC mutex; verify $\ge 4\times$ concurrent speedup. |
