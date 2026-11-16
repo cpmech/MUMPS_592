@@ -11,12 +11,18 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: replaced a threadprivate thread id with an OpenMP ancestor query;
+C          no public interface changed.
+C  =============================================================================
+C
       MODULE ZMUMPS_SOL_LR
       USE ZMUMPS_LR_TYPE
       USE ZMUMPS_LR_CORE
       USE MUMPS_LR_STATS
       USE ZMUMPS_LR_DATA_M, only: BLR_ARRAY
-      USE MUMPS_L0_OMP_M, ONLY : thread_id
       USE ISO_C_BINDING
 !$    USE OMP_LIB
       IMPLICIT NONE
@@ -129,7 +135,9 @@ C     IW(IPOS_INIT+1): starting of index list of the front
       PPIV = PPIV_INIT 
       th_num = 0
       if (KEEP(405).EQ.1) then
-          th_num = thread_id - 1
+          th_num = 0
+!$        IF (OMP_GET_ACTIVE_LEVEL() .GE. 1)
+!$   &      th_num = OMP_GET_ANCESTOR_THREAD_NUM(1)
       endif
 #if !defined(NOMIXHPC)
       WSMAX = 0
@@ -882,7 +890,9 @@ C         Cast RHS in each precision in TEMP_RHS
       th_num = 0
 !$    th_num = omp_get_thread_num()
       if (K405.EQ.1) then
-        th_num = thread_id - 1
+        th_num = 0
+!$      IF (OMP_GET_ACTIVE_LEVEL() .GE. 1)
+!$   &  th_num = OMP_GET_ANCESTOR_THREAD_NUM(1)
       endif
       IF (K448.GT.0.AND.MIXED_STORED) THEN
 C       Allocate RB and QRB workspaces for each thread        
@@ -1990,7 +2000,9 @@ C       as an array and so it must be allocated.
       ENDIF
       th_num = 0
       if (KEEP(405).EQ.1) then
-          th_num = thread_id - 1
+          th_num = 0
+!$        IF (OMP_GET_ACTIVE_LEVEL() .GE. 1)
+!$   &      th_num = OMP_GET_ANCESTOR_THREAD_NUM(1)
       endif
 #if !defined(NOMIXHPC)
       WSMAX = 0
@@ -2343,7 +2355,9 @@ C       N is constant for all blocks in the panel
       th_num = 0
 !$    th_num = omp_get_thread_num()
       if (K405.EQ.1) then
-        th_num = thread_id - 1
+        th_num = 0
+!$      IF (OMP_GET_ACTIVE_LEVEL() .GE. 1)
+!$   &  th_num = OMP_GET_ANCESTOR_THREAD_NUM(1)
       endif
       IF (K448.GE.1.AND.MIXED_STORED) THEN
 C       Allocate RB and QRB workspaces for each thread        

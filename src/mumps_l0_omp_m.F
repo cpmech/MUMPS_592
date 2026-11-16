@@ -11,11 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: removed the !$OMP THREADPRIVATE directive and the dead module
+C          globals; the module body is now empty and thread ids come from
+C          OpenMP runtime queries into PRIVATE locals. No public interface
+C          changed.
+C  =============================================================================
+C
       MODULE MUMPS_L0_OMP_M
-        USE ISO_C_BINDING
-        LOGICAL, DIMENSION(:), POINTER :: NB_CORE_PER_THREAD_CHANGED
-        INTEGER, DIMENSION(:), POINTER :: NB_CORE_PER_THREAD
-        INTEGER :: THREAD_ID = 1
-        LOGICAL :: IS_ROOT_OF_L0_OMP
-!$OMP   THREADPRIVATE ( THREAD_ID , IS_ROOT_OF_L0_OMP )
       END MODULE MUMPS_L0_OMP_M

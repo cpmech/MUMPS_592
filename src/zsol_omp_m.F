@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: removed !$OMP THREADPRIVATE thread-local state; thread ids now come
+C          from OpenMP runtime queries into PRIVATE locals. No public
+C          interface changed.
+C  =============================================================================
+C
       MODULE ZMUMPS_SOL_L0OMP_M
       CONTAINS
       SUBROUTINE ZMUMPS_SOL_L0OMP_R(N, MTYPE,
@@ -33,7 +41,6 @@ C
      &  L0_OMP_FACTORS, LL0_OMP_FACTORS,
      &  DO_PRUN, TO_PROCESS )
       USE ZMUMPS_INTR_TYPES, ONLY : ZMUMPS_L0OMPFAC_T
-      USE MUMPS_L0_OMP_M, ONLY : THREAD_ID
 !$      USE OMP_LIB
       IMPLICIT NONE
       INTEGER, INTENT( in ) :: N, MTYPE, NRHS, SLAVEF, LIW
@@ -106,11 +113,6 @@ C
       NBROOT_PROCESSED = 0
       PTRICB = 0
 !$    NOMP_SAVE = omp_get_max_threads()
-!$OMP PARALLEL
-      THREAD_ID = 1
-!$    THREAD_ID = OMP_GET_THREAD_NUM() + 1
-!$OMP BARRIER
-!$OMP END PARALLEL
 !$    NOMP_INNER = 1
 !$    IF (KEEP(369).GT.0) THEN
 !$      NOMP_TOTAL = omp_get_max_threads()
@@ -148,7 +150,8 @@ C
 !$OMP&           IS_INODE_PROCESSED_P,
 !$OMP&           INFO_P, ERROR_WAS_BROADCASTED_P, NOMP_SAVE, allocok )
 !$OMP& REDUCTION( + : NBROOT_PROCESSED )
-      THREAD_ID_P = THREAD_ID
+      THREAD_ID_P = 1
+!$    THREAD_ID_P = OMP_GET_THREAD_NUM() + 1
 #if defined(WORKAROUNDINTELILP64OPENMPLIMITATION)
 !$    CALL omp_set_num_threads(int(NOMP_INNER,4))
 #else
@@ -325,7 +328,6 @@ C
      &  L0_OMP_FACTORS, LL0_OMP_FACTORS )
       USE ZMUMPS_INTR_TYPES, ONLY : ZMUMPS_L0OMPFAC_T
 !$    USE OMP_LIB
-      USE MUMPS_L0_OMP_M, ONLY : THREAD_ID
       IMPLICIT NONE
       INTEGER, INTENT( in ) :: N, MTYPE, NRHS, SLAVEF, LIW
       INTEGER, INTENT( in ) :: IW(LIW)
@@ -404,12 +406,7 @@ C
          INFO(2)=SLAVEF
          GOTO 100
       endif
-!$OMP PARALLEL
 !$    NOMP_SAVE = omp_get_max_threads()
-      THREAD_ID = 1
-!$    THREAD_ID = OMP_GET_THREAD_NUM() + 1
-!$OMP BARRIER
-!$OMP END PARALLEL
 !$    NOMP_INNER = 1
 !$    IF (KEEP(369).GT.0) THEN
 !$      NOMP_TOTAL = omp_get_max_threads()
@@ -447,7 +444,8 @@ C
 !$OMP&           INODE,
 !$OMP&           INFO_P, DO_MCAST2_TERMBWD_P,
 !$OMP&           ERROR_WAS_BROADCASTED_P, NOMP_SAVE, allocok )
-      THREAD_ID_P = THREAD_ID
+      THREAD_ID_P = 1
+!$    THREAD_ID_P = OMP_GET_THREAD_NUM() + 1
 #if defined(WORKAROUNDINTELILP64OPENMPLIMITATION)
 !$    CALL omp_set_num_threads(int(NOMP_INNER,4))
 #else
