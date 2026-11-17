@@ -13,6 +13,14 @@
  *  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
  *
  */
+/*
+ *  ===========================================================================
+ *  Modification for thread safety (Phase 1), 2026-11-17
+ *  Author: Dorival Pedroso (Kleo completed the edit)
+ *  Nature: declared the thread-safety capability symbol; the structures and
+ *          the [sdcz]mumps_c prototypes are unchanged.
+ *  ===========================================================================
+ */
 
 
 #ifndef MUMPS_C_TYPES_H
@@ -69,5 +77,21 @@ typedef struct {double r,i;} mumps_double_complex;
 #define MUMPS_ARITH_DBL    ( MUMPS_ARITH_d | MUMPS_ARITH_z )
 
 #define MUMPS_OFF_T MUMPS_INT8
+
+/* Thread-safety capability (additive; the structures and the [sdcz]mumps_c
+ * prototypes are unchanged).
+ *   1 = every entry point may be called from any thread: calls are dispatched
+ *       internally to a persistent MUMPS worker.
+ *   0 is never returned by this library. Source-level clients may test
+ *       MUMPS_THREAD_SAFE_VERSION at compile time and mumps_is_thread_safe()
+ *       at run time. */
+#define MUMPS_THREAD_SAFE_VERSION 1
+#ifdef __cplusplus
+extern "C" {
+#endif
+int mumps_is_thread_safe(void);
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* MUMPS_C_TYPES_H */
