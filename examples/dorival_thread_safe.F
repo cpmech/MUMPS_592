@@ -52,7 +52,7 @@ C  With locked = 0 or 1 the process may deadlock instead of failing (MUMPS or
 C  its OpenMP runtime waiting on a lock a corrupted instance never releases),
 C  so wrap a run in `timeout`: the exit code 124 is itself a reproduction.
 C
-C  Observed on this workstation (MUMPS 5.9.2 with MKL, OMP_NUM_THREADS = 8,
+C  Observed with a stock MUMPS 5.9.2 build (MKL, OMP_NUM_THREADS = 8,
 C  10 cycles, n = 100):
 C
 C     8 threads, locked = 0   6/6 runs fail: SIGSEGV, an allocatable-array
@@ -72,10 +72,10 @@ C  Build against the installed library (from this directory):
 C
 C     ifx -O -qopenmp -I/usr/local/include/mumps -I../libseq
 C         dorival_thread_safe.F -o dorival_thread_safe
-C         -L/usr/local/lib/mumps -ldmumps_cpmech -lsmumps_cpmech
-C         -lmumps_common_cpmech -lpord_cpmech -lmpiseq_cpmech -lmetis
+C         -L/usr/local/lib/mumps -ldmumps -lsmumps
+C         -lmumps_common -lpord -lmpiseq -lmetis
 C         -L$MKLROOT/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread
-C         -lmkl_core -liomp5 -lpthread
+C         -lmkl_core -lpthread
 C
 C  or `make dorival_thread_safe` after building the library tree.
 C
