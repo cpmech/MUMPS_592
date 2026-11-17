@@ -19,12 +19,38 @@ C          Schur complement C-interface cases.
 C          No public interface changed.
 C  =============================================================================
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 1), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: routed the Fortran entry CALL SMUMPS(id) through the persistent
+C          single-worker dispatcher.
+C          No public interface changed.
+C  =============================================================================
+C
 C  ===========================
 C  FORTRAN 90 Driver for SMUMPS
 C       (MPI based code) 
 C  ===========================
 C
       SUBROUTINE SMUMPS( id )
+C     Routes the Fortran entry through the persistent MUMPS worker thread so
+C     that CALL SMUMPS(id) is safe from several callers at once, exactly like
+C     the C entry.  A caller already running on the worker (the C path) is
+C     executed inline by the dispatcher, so this never queues behind itself.
+C     The first dispatcher argument is the arithmetic code for single
+C     precision, 1 (include/mumps_c_types.h: s=1, d=2, c=4, z=8).
+      USE SMUMPS_STRUC_DEF
+      TYPE (SMUMPS_STRUC) :: id
+      INTEGER MUMPS_TS_DISPATCH_F77, STATUS
+      EXTERNAL SMUMPS_TS_INNER, MUMPS_TS_DISPATCH_F77
+      STATUS = MUMPS_TS_DISPATCH_F77(1, id, SMUMPS_TS_INNER)
+      IF (STATUS .NE. 0) THEN
+        id%INFOG(1) = -9
+      END IF
+      RETURN
+      END SUBROUTINE SMUMPS
+C
+      SUBROUTINE SMUMPS_TS_INNER( id )
       USE MUMPS_MEMORY_MOD
       USE SMUMPS_STRUC_DEF
       USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_PTR, C_LOC, C_F_POINTER
@@ -2389,7 +2415,7 @@ C     ------------------------------------
 99995 FORMAT (' ** ERROR RETURN ** FROM SMUMPS INFO(1)=', I5)
 99994 FORMAT (' ** INFO(2)=', I16)
 99993 FORMAT (' ** Allocation error: could not permute JCN.')
-      END SUBROUTINE SMUMPS
+      END SUBROUTINE SMUMPS_TS_INNER
 *
       SUBROUTINE SMUMPS_SET_INFOG( INFO, INFOG, COMM, MYID )
       IMPLICIT NONE

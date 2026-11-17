@@ -114,6 +114,7 @@ OBJS_C_COMMON = \
         mumps_register_thread.o\
         mumps_thread.o\
         mumps_thread_affinity.o\
+        mumps_thread_safe.o\
         mumps_flytes.o\
 	mumps_sol_omp_memory_manager.o \
         mumps_save_restore_C.o\

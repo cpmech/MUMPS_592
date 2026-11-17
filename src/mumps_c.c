@@ -241,19 +241,23 @@ MUMPS_F77( MUMPS_INT      *job,
            );
 #if MUMPS_ARITH == MUMPS_ARITH_s
 # define mumps_c       smumps_c
+# define mumps_c_body  smumps_c_body
 # define MUMPS_STRUC_C SMUMPS_STRUC_C
 #elif MUMPS_ARITH == MUMPS_ARITH_d
 # define mumps_c       dmumps_c
+# define mumps_c_body  dmumps_c_body
 # define MUMPS_STRUC_C DMUMPS_STRUC_C
 #elif MUMPS_ARITH == MUMPS_ARITH_c
 # define mumps_c       cmumps_c
+# define mumps_c_body  cmumps_c_body
 # define MUMPS_STRUC_C CMUMPS_STRUC_C
 #elif MUMPS_ARITH == MUMPS_ARITH_z
 # define mumps_c       zmumps_c
+# define mumps_c_body  zmumps_c_body
 # define MUMPS_STRUC_C ZMUMPS_STRUC_C
 #endif
-void MUMPS_CALL
-mumps_c(MUMPS_STRUC_C * mumps_par)
+static void
+mumps_c_body(MUMPS_STRUC_C * mumps_par)
 {
     /*
      * The following local variables will 
@@ -588,4 +592,22 @@ mumps_c(MUMPS_STRUC_C * mumps_par)
       mumps_par->ooc_prefix[i]=(char)ooc_prefix[i];
     }
     mumps_par->ooc_prefix[ooc_prefixlen]='\0';
+}
+/*
+ * Thin public entry point.  The whole call is handed to the persistent
+ * worker; on success the caller still sees exactly what MUMPS wrote in
+ * infog/infog8 (and the other output arrays).  Only a dispatcher failure is
+ * reported here, since in that case the Fortran layer never ran.
+ */
+void MUMPS_CALL
+mumps_c(MUMPS_STRUC_C * mumps_par)
+{
+    if (mumps_ts_dispatch(MUMPS_ARITH, mumps_par,
+                          (mumps_ts_fn) mumps_c_body) != 0)
+      {
+        if (mumps_par != NULL)
+          {
+            mumps_par->infog[0] = MUMPS_TS_DISPATCH_ERROR;
+          }
+      }
 }

@@ -79,4 +79,22 @@ MUMPS_RCOPY_32TO64_64C_IP_C(float *inouttab, MUMPS_INT8 *sizetab);
     F_SYMBOL(rcopy_64to32_64c_ip_c,RCOPY_64TO32_64C_IP_C)
 void MUMPS_CALL
 MUMPS_RCOPY_64to32_64C_IP_C(double *inouttab, MUMPS_INT8 *sizetab);
+/*
+ * Persistent single-worker dispatcher (Phase 1).  MUMPS_THREAD_SAFE_VERSION
+ * is 1.  mumps_ts_dispatch returns 0 once the worker has run the call and
+ * -1 when the worker is unavailable; mumps_is_thread_safe is the capability
+ * symbol clients can probe.  mumps_ts_dispatch_f77 is the same entry point
+ * exposed for the C side, and MUMPS_TS_DISPATCH_F77 follows the compiler
+ * symbol convention so that [SDCZ]MUMPS can reach it with a plain EXTERNAL
+ * declaration from Fortran.
+ */
+#define MUMPS_THREAD_SAFE_VERSION 1
+#define MUMPS_TS_DISPATCH_ERROR (-9)
+typedef void (*mumps_ts_fn)(void *);
+int mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn);
+int mumps_ts_dispatch_f77(int arith, void *struc, mumps_ts_fn fn);
+#define MUMPS_TS_DISPATCH_F77 \
+    F_SYMBOL(ts_dispatch_f77,TS_DISPATCH_F77)
+int MUMPS_TS_DISPATCH_F77(int arith, void *struc, mumps_ts_fn fn);
+int mumps_is_thread_safe(void);
 #endif /* MUMPS_COMMON_H */
