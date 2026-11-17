@@ -21,6 +21,16 @@
  *          macros. No public interface changed.
  *  ===========================================================================
  */
+/*
+ *  ===========================================================================
+ *  Modification for thread safety (Phase 0), 2026-11-17
+ *  Author: Dorival Pedroso (Kleo completed the edit)
+ *  Nature: replaced the per-arithmetic output-pointer statics and the shared
+ *          getter/setter hand-off with one caller-owned slot array passed to
+ *          [SDCZ]MUMPS_F77 and read back after the call.
+ *          No public interface changed.
+ *  ===========================================================================
+ */
 /* Header used for debug purpose only
 #include <stdio.h>
 */
@@ -91,6 +101,26 @@
 #  define F_SYM_ARITH(lower_case,upper_case) zmumps_##lower_case
 # endif
 #endif
+/*
+ * Slots filled by [SDCZ]MUMPS_F77 and read back by mumps_c. Both sides use
+ * this fixed order; keep it in sync with the OUT_PTRS indices in
+ * src/[sdcz]mumps_f77.F.
+ */
+enum {
+    MUMPS_OUT_MAPPING = 0,
+    MUMPS_OUT_PIVNUL_LIST,
+    MUMPS_OUT_SYM_PERM,
+    MUMPS_OUT_UNS_PERM,
+    MUMPS_OUT_GLOB2LOC_RHS,
+    MUMPS_OUT_GLOB2LOC_SOL,
+    MUMPS_OUT_COLSCA,
+    MUMPS_OUT_ROWSCA,
+    MUMPS_OUT_COLSCA_LOC,
+    MUMPS_OUT_ROWSCA_LOC,
+    MUMPS_OUT_RHSINTR,
+    MUMPS_OUT_SINGULAR_VALUES,
+    MUMPS_OUT_NSLOTS
+};
 #define MUMPS_F77       \
     F_SYM_ARITH(f77,F77)
 void MUMPS_CALL
@@ -206,139 +236,9 @@ MUMPS_F77( MUMPS_INT      *job,
            MUMPS_INT      *save_dirlen,
            MUMPS_INT      *save_prefixlen,
 #endif
-           MUMPS_INT      *metis_options
+           MUMPS_INT      *metis_options,
+           void          **out_ptrs
            );
-/*
- * COLSCA and ROWSCA are static. They are passed inside cmumps_f77 but
- * might also be changed on return by MUMPS_ASSIGN_COLSCA/ROWSCA
- * NB: They are put here because they use MUMPS_REAL and need thus
- * one symbol per arithmetic.
- * COLSCA_LOC and ROWSCA_LOC are also static. However, they are built
- * at the end of the factorization and are always out arguments, they
- * cannot be input.
- * RHSINTR is the intermediate right-hand side. It is always allocated
- * by MUMPS, although its content can be set or modified by the user.
- * But the address of RHSINTR is out.
- */
-#if MUMPS_ARITH == MUMPS_ARITH_s
-# define MUMPS_COLSCA_STATIC SMUMPS_COLSCA_STATIC
-# define MUMPS_ROWSCA_STATIC SMUMPS_ROWSCA_STATIC
-# define MUMPS_COLSCA_LOC_STATIC SMUMPS_COLSCA_LOC_STATIC
-# define MUMPS_ROWSCA_LOC_STATIC SMUMPS_ROWSCA_LOC_STATIC
-# define MUMPS_RHSINTR_STATIC SMUMPS_RHSINTR_STATIC
-# define MUMPS_SINGULAR_VALUES_STATIC SMUMPS_SINGULAR_VALUES_STATIC
-#elif MUMPS_ARITH == MUMPS_ARITH_d
-# define MUMPS_COLSCA_STATIC DMUMPS_COLSCA_STATIC
-# define MUMPS_ROWSCA_STATIC DMUMPS_ROWSCA_STATIC
-# define MUMPS_COLSCA_LOC_STATIC DMUMPS_COLSCA_LOC_STATIC
-# define MUMPS_ROWSCA_LOC_STATIC DMUMPS_ROWSCA_LOC_STATIC
-# define MUMPS_RHSINTR_STATIC DMUMPS_RHSINTR_STATIC
-# define MUMPS_SINGULAR_VALUES_STATIC DMUMPS_SINGULAR_VALUES_STATIC
-#elif MUMPS_ARITH == MUMPS_ARITH_c
-# define MUMPS_COLSCA_STATIC CMUMPS_COLSCA_STATIC
-# define MUMPS_ROWSCA_STATIC CMUMPS_ROWSCA_STATIC
-# define MUMPS_COLSCA_LOC_STATIC CMUMPS_COLSCA_LOC_STATIC
-# define MUMPS_ROWSCA_LOC_STATIC CMUMPS_ROWSCA_LOC_STATIC
-# define MUMPS_RHSINTR_STATIC CMUMPS_RHSINTR_STATIC
-# define MUMPS_SINGULAR_VALUES_STATIC CMUMPS_SINGULAR_VALUES_STATIC
-#elif MUMPS_ARITH == MUMPS_ARITH_z
-# define MUMPS_COLSCA_STATIC ZMUMPS_COLSCA_STATIC
-# define MUMPS_ROWSCA_STATIC ZMUMPS_ROWSCA_STATIC
-# define MUMPS_COLSCA_LOC_STATIC ZMUMPS_COLSCA_LOC_STATIC
-# define MUMPS_ROWSCA_LOC_STATIC ZMUMPS_ROWSCA_LOC_STATIC
-# define MUMPS_RHSINTR_STATIC ZMUMPS_RHSINTR_STATIC
-# define MUMPS_SINGULAR_VALUES_STATIC ZMUMPS_SINGULAR_VALUES_STATIC
-#endif
-static MUMPS_REAL * MUMPS_COLSCA_STATIC;
-static MUMPS_REAL * MUMPS_ROWSCA_STATIC;
-static MUMPS_REAL * MUMPS_COLSCA_LOC_STATIC;
-static MUMPS_REAL * MUMPS_ROWSCA_LOC_STATIC;
-static MUMPS_COMPLEX * MUMPS_RHSINTR_STATIC;
-static MUMPS_REAL * MUMPS_SINGULAR_VALUES_STATIC;
-#define MUMPS_ASSIGN_COLSCA \
-    F_SYM_ARITH(assign_colsca,ASSIGN_COLSCA)
-void MUMPS_CALL
-MUMPS_ASSIGN_COLSCA(MUMPS_REAL * f77colsca)
-{
-  MUMPS_COLSCA_STATIC = f77colsca;
-}
-#define MUMPS_NULLIFY_C_COLSCA \
-    F_SYM_ARITH(nullify_c_colsca,NULLIFY_C_COLSCA)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_COLSCA()
-{
-  MUMPS_COLSCA_STATIC = 0;
-}
-#define MUMPS_ASSIGN_ROWSCA \
-    F_SYM_ARITH(assign_rowsca,ASSIGN_ROWSCA)
-void MUMPS_CALL
-MUMPS_ASSIGN_ROWSCA(MUMPS_REAL * f77rowsca)
-{
-  MUMPS_ROWSCA_STATIC = f77rowsca;
-}
-#define MUMPS_NULLIFY_C_ROWSCA \
-    F_SYM_ARITH(nullify_c_rowsca,NULLIFY_C_ROWSCA)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_ROWSCA()
-{
-  MUMPS_ROWSCA_STATIC = 0;
-}
-#define MUMPS_ASSIGN_COLSCA_LOC \
-    F_SYM_ARITH(assign_colsca_loc,ASSIGN_COLSCA_LOC)
-void MUMPS_CALL
-MUMPS_ASSIGN_COLSCA_LOC(MUMPS_REAL * f77colsca_loc)
-{
-  MUMPS_COLSCA_LOC_STATIC = f77colsca_loc;
-}
-#define MUMPS_NULLIFY_C_COLSCA_LOC \
-    F_SYM_ARITH(nullify_c_colsca_loc,NULLIFY_C_COLSCA_LOC)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_COLSCA_LOC()
-{
-  MUMPS_COLSCA_LOC_STATIC = 0;
-}
-#define MUMPS_ASSIGN_ROWSCA_LOC \
-    F_SYM_ARITH(assign_rowsca_loc,ASSIGN_ROWSCA_LOC)
-void MUMPS_CALL
-MUMPS_ASSIGN_ROWSCA_LOC(MUMPS_REAL * f77rowsca_loc)
-{
-  MUMPS_ROWSCA_LOC_STATIC = f77rowsca_loc;
-}
-#define MUMPS_NULLIFY_C_ROWSCA_LOC \
-    F_SYM_ARITH(nullify_c_rowsca_loc,NULLIFY_C_ROWSCA_LOC)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_ROWSCA_LOC()
-{
-  MUMPS_ROWSCA_LOC_STATIC = 0;
-}
-#define MUMPS_ASSIGN_RHSINTR \
-    F_SYM_ARITH(assign_rhsintr,ASSIGN_RHSINTR)
-void MUMPS_CALL
-MUMPS_ASSIGN_RHSINTR(MUMPS_COMPLEX * f77rhsintr)
-{
-  MUMPS_RHSINTR_STATIC = f77rhsintr;
-}
-#define MUMPS_NULLIFY_C_RHSINTR \
-    F_SYM_ARITH(nullify_c_rhsintr,NULLIFY_C_RHSINTR)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_RHSINTR()
-{
-  MUMPS_RHSINTR_STATIC = 0;
-}
-#define MUMPS_ASSIGN_SINGULAR_VALUES \
-    F_SYM_ARITH(assign_singular_values,ASSIGN_SINGULAR_VALUES)
-void MUMPS_CALL
-MUMPS_ASSIGN_SINGULAR_VALUES(MUMPS_REAL * f77singular_values)
-{
-  MUMPS_SINGULAR_VALUES_STATIC = f77singular_values;
-}
-#define MUMPS_NULLIFY_C_SING_VALUES \
-    F_SYM_ARITH(nullify_c_sing_values,NULLIFY_C_SING_VALUES)
-void MUMPS_CALL
-MUMPS_NULLIFY_C_SING_VALUES()
-{
-  MUMPS_SINGULAR_VALUES_STATIC = 0;
-}
 #if MUMPS_ARITH == MUMPS_ARITH_s
 # define mumps_c       smumps_c
 # define MUMPS_STRUC_C SMUMPS_STRUC_C
@@ -409,21 +309,16 @@ mumps_c(MUMPS_STRUC_C * mumps_par)
 #endif
     MUMPS_INT write_problemlen;
     MUMPS_INT *metis_options;
+    void *out_ptrs[MUMPS_OUT_NSLOTS];
     int i;
     static const MUMPS_INT no = 0;
     static const MUMPS_INT yes = 1;
     idummyp = &idummy;
     cdummyp = &cdummy;
     rdummyp = &rdummy;
-    /* [SDCZ]MUMPS_F77 always calls either
-     * MUMPS_NULLIFY_C_COLSCA or MUMPS_ASSIGN_C_COLSCA
-     * (and ROWSCA). The next two lines are thus not
-     * strictly necessary. */
-    MUMPS_COLSCA_STATIC=0;
-    MUMPS_ROWSCA_STATIC=0;
-    MUMPS_COLSCA_LOC_STATIC=0;
-    MUMPS_ROWSCA_LOC_STATIC=0;
-    MUMPS_SINGULAR_VALUES_STATIC=0;
+    /* [SDCZ]MUMPS_F77 fills at most MUMPS_OUT_NSLOTS slots; zero the array
+     * first so every slot it does not touch reads back as a null pointer. */
+    memset(out_ptrs, 0, sizeof(out_ptrs));
     /* Initialize pointers to zero for job == -1 */
     if ( mumps_par->job == -1 )
       { /* job = -1: we just reset all pointers to 0 */
@@ -625,7 +520,8 @@ mumps_c(MUMPS_STRUC_C * mumps_par)
           , &save_dirlen
           , &save_prefixlen
 #endif
-          , metis_options    
+          , metis_options
+          , out_ptrs
     );
     /*
      * Set interface to C (KEEP(500)=1) after job=-1
@@ -635,43 +531,44 @@ mumps_c(MUMPS_STRUC_C * mumps_par)
         mumps_par->keep[499]=1;
       }
     /*
-     * mapping and pivnul_list are usually 0 except if
-     * MUMPS_ASSIGN_MAPPING/MUMPS_ASSIGN_PIVNUL_LIST was called.
+     * The Fortran wrapper reports the addresses of its output arrays in
+     * out_ptrs. Slots are null when the corresponding array is not
+     * associated.
      */
-    mumps_par->mapping=mumps_get_mapping();
-    mumps_par->pivnul_list=mumps_get_pivnul_list();
+    mumps_par->mapping       = (MUMPS_INT *) out_ptrs[MUMPS_OUT_MAPPING];
+    mumps_par->pivnul_list   = (MUMPS_INT *) out_ptrs[MUMPS_OUT_PIVNUL_LIST];
     /* to get permutations computed during analysis */
-    mumps_par->sym_perm=mumps_get_sym_perm();
-    mumps_par->uns_perm=mumps_get_uns_perm();
+    mumps_par->sym_perm      = (MUMPS_INT *) out_ptrs[MUMPS_OUT_SYM_PERM];
+    mumps_par->uns_perm      = (MUMPS_INT *) out_ptrs[MUMPS_OUT_UNS_PERM];
     /* colsca_loc and rowsca_loc are always out */
-    mumps_par->colsca_loc=MUMPS_COLSCA_LOC_STATIC;
-    mumps_par->rowsca_loc=MUMPS_ROWSCA_LOC_STATIC;
+    mumps_par->colsca_loc    = (MUMPS_REAL *) out_ptrs[MUMPS_OUT_COLSCA_LOC];
+    mumps_par->rowsca_loc    = (MUMPS_REAL *) out_ptrs[MUMPS_OUT_ROWSCA_LOC];
     /* glob2loc_rhs, glob2loc_sol and rhsintr are out */
-    mumps_par->glob2loc_rhs=mumps_get_glob2loc_rhs();
-    mumps_par->glob2loc_sol=mumps_get_glob2loc_sol();
-    mumps_par->rhsintr=MUMPS_RHSINTR_STATIC;
+    mumps_par->glob2loc_rhs  = (MUMPS_INT *) out_ptrs[MUMPS_OUT_GLOB2LOC_RHS];
+    mumps_par->glob2loc_sol  = (MUMPS_INT *) out_ptrs[MUMPS_OUT_GLOB2LOC_SOL];
+    mumps_par->rhsintr       = (MUMPS_COMPLEX *) out_ptrs[MUMPS_OUT_RHSINTR];
     /* singular_values is always out */
-    mumps_par->singular_values=MUMPS_SINGULAR_VALUES_STATIC;
+    mumps_par->singular_values =
+        (MUMPS_REAL *) out_ptrs[MUMPS_OUT_SINGULAR_VALUES];
     /*
      * colsca/rowsca can either be user data or have been modified
-     * within mumps by calls to MUMPS_ASSIGN_COLSCA and/or
-     * MUMPS_ASSIGN_ROWSCA. In all cases their address is contained
-     * in MUMPS_COLSCA_STATIC and/or MUMPS_ROWSCA_STATIC.
+     * within mumps. In all cases their address is contained in the
+     * corresponding out_ptrs slot.
      *
      * In case of a null pointer, we also reset mumps_par->rowsca/colsca
      * to 0 (case of JOB=-2, the Fortran pointer will be NULL but the
      * C pointer should also be null.
      */
     if (rowsca_avail == no) {
-      mumps_par->rowsca = MUMPS_ROWSCA_STATIC;
-      if (MUMPS_ROWSCA_STATIC) {
+      mumps_par->rowsca = (MUMPS_REAL *) out_ptrs[MUMPS_OUT_ROWSCA];
+      if (mumps_par->rowsca) {
          /* remember that row Scaling was computed by MUMPS */
          mumps_par->rowsca_from_mumps=1;
       }
     }
     if (colsca_avail == no) {
-      mumps_par->colsca = MUMPS_COLSCA_STATIC;
-      if (MUMPS_COLSCA_STATIC) {
+      mumps_par->colsca = (MUMPS_REAL *) out_ptrs[MUMPS_OUT_COLSCA];
+      if (mumps_par->colsca) {
          /* remember that column Scaling was computed by MUMPS */
          mumps_par->colsca_from_mumps=1;
       }

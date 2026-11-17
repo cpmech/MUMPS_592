@@ -13,106 +13,43 @@
  *  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
  *
  */
+/*
+ *  ===========================================================================
+ *  Modification for thread safety (Phase 0), 2026-11-17
+ *  Author: Dorival Pedroso (Kleo completed the edit)
+ *  Nature: removed the six process-global output-pointer statics and their
+ *          twelve getter/setter routines, and added the process-wide mutex
+ *          used by the [SDCZ]MUMPS_F77 instance table.
+ *  ===========================================================================
+ */
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
+#include <pthread.h>
 #include "mumps_common.h"
-/* Special case of mapping and pivnul_list -- allocated from MUMPS */
-static MUMPS_INT * MUMPS_MAPPING;
-static MUMPS_INT * MUMPS_PIVNUL_LIST;
-/* as uns_perm and sym_perm */
-static MUMPS_INT * MUMPS_SYM_PERM;
-static MUMPS_INT * MUMPS_UNS_PERM;
-static MUMPS_INT * MUMPS_GLOB2LOC_RHS;
-static MUMPS_INT * MUMPS_GLOB2LOC_SOL;
-MUMPS_INT*
-mumps_get_mapping()
+/*
+ * One process-wide lock for the [SDCZ]MUMPS_F77 instance tables. It only
+ * guards table scans/growth and instance creation/destruction; solver calls
+ * themselves do not hold it.
+ */
+static pthread_mutex_t mumps_f77_mutex = PTHREAD_MUTEX_INITIALIZER;
+void MUMPS_CALL
+MUMPS_F77_LOCK(void)
 {
-    return MUMPS_MAPPING;
+    if (pthread_mutex_lock(&mumps_f77_mutex) != 0)
+      {
+        fprintf(stderr, "MUMPS: fatal error: mumps_f77_lock failed\n");
+        abort();
+      }
 }
 void MUMPS_CALL
-MUMPS_ASSIGN_MAPPING(MUMPS_INT * f77mapping)
+MUMPS_F77_UNLOCK(void)
 {
-    MUMPS_MAPPING = f77mapping;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_MAPPING()
-{
-    MUMPS_MAPPING = 0;
-}
-MUMPS_INT*
-mumps_get_pivnul_list()
-{
-    return MUMPS_PIVNUL_LIST;
-}
-void MUMPS_CALL
-MUMPS_ASSIGN_PIVNUL_LIST(MUMPS_INT * f77pivnul_list)
-{
-    MUMPS_PIVNUL_LIST = f77pivnul_list;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_PIVNUL_LIST()
-{
-    MUMPS_PIVNUL_LIST = 0;
-}
-MUMPS_INT*
-mumps_get_sym_perm()
-{
-    return MUMPS_SYM_PERM;
-}
-void MUMPS_CALL
-MUMPS_ASSIGN_SYM_PERM(MUMPS_INT * f77sym_perm)
-{
-    MUMPS_SYM_PERM = f77sym_perm;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_SYM_PERM()
-{
-    MUMPS_SYM_PERM = 0;
-}
-MUMPS_INT*
-mumps_get_uns_perm()
-{
-    return MUMPS_UNS_PERM;
-}
-void MUMPS_CALL
-MUMPS_ASSIGN_UNS_PERM(MUMPS_INT * f77uns_perm)
-{
-    MUMPS_UNS_PERM = f77uns_perm;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_UNS_PERM()
-{
-    MUMPS_UNS_PERM = 0;
-}
-MUMPS_INT*
-mumps_get_glob2loc_rhs()
-{
-    return MUMPS_GLOB2LOC_RHS;
-}
-void MUMPS_CALL
-MUMPS_ASSIGN_GLOB2LOC_RHS(MUMPS_INT * f77glob2loc_rhs)
-{
-    MUMPS_GLOB2LOC_RHS = f77glob2loc_rhs;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_GLOB2LOC_RHS()
-{
-    MUMPS_GLOB2LOC_RHS = 0;
-}
-MUMPS_INT*
-mumps_get_glob2loc_sol()
-{
-    return MUMPS_GLOB2LOC_SOL;
-}
-void MUMPS_CALL
-MUMPS_ASSIGN_GLOB2LOC_SOL(MUMPS_INT * f77glob2loc_sol)
-{
-    MUMPS_GLOB2LOC_SOL = f77glob2loc_sol;
-}
-void MUMPS_CALL
-MUMPS_NULLIFY_C_GLOB2LOC_SOL()
-{
-    MUMPS_GLOB2LOC_SOL = 0;
+    if (pthread_mutex_unlock(&mumps_f77_mutex) != 0)
+      {
+        fprintf(stderr, "MUMPS: fatal error: mumps_f77_unlock failed\n");
+        abort();
+      }
 }
 void MUMPS_CALL
 MUMPS_ICOPY_32TO64_64C_IP_C(MUMPS_INT *inouttab, MUMPS_INT8 *sizetab)

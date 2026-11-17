@@ -11,6 +11,16 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: replaced the process-global MUMPS_ASSIGN_* pointer hand-off with a
+C          caller-owned OUT_PTRS C_PTR array, and serialized the JOB=-1
+C          instance-table update with the shared MUMPS_F77_LOCK. Old table
+C          storage is retained so no live instance pointer is invalidated.
+C          No public interface changed.
+C  =============================================================================
+C
       SUBROUTINE SMUMPS_F77( JOB, SYM, PAR, COMM_F77, N, NBLK, ICNTL,
      &     CNTL, KEEP, DKEEP, KEEP8, NZ, NNZ, IRN, IRNhere, JCN,
      &     JCNhere, A, Ahere, NZ_loc, NNZ_loc, IRN_loc, IRN_lochere,
@@ -38,9 +48,10 @@ C
 #if ! defined(NO_SAVE_RESTORE)
      &     SAVE_DIRLEN, SAVE_PREFIXLEN,
 #endif
-     &     METIS_OPTIONS
+     &     METIS_OPTIONS, OUT_PTRS
      &     )
       USE SMUMPS_STRUC_DEF
+      USE, INTRINSIC :: ISO_C_BINDING
       IMPLICIT NONE
       INTEGER OOC_PREFIX_MAX_LENGTH, OOC_TMPDIR_MAX_LENGTH
       INTEGER PB_MAX_LENGTH
@@ -86,6 +97,7 @@ C
       INTEGER, INTENT(in) :: SAVE_PREFIX(SAVE_PREFIX_MAX_LENGTH)
 #endif
       INTEGER METIS_OPTIONS(40)
+      TYPE(C_PTR) :: OUT_PTRS(*)
       INTEGER IRNhere, JCNhere, Ahere, ELTPTRhere, ELTVARhere,
      &        A_ELThere, BLKPTRhere, BLKVARhere, PERM_INhere,
      &        WK_USERhere, ROWINDhere, COLINDhere, PIVOTShere,
@@ -109,31 +121,10 @@ C
       INTEGER(8) :: A_ELT_SIZE, NNZ_i
       INTEGER SMUMPS_STRUC_ARRAY_SIZE_INIT
       PARAMETER (SMUMPS_STRUC_ARRAY_SIZE_INIT=10)
-      EXTERNAL MUMPS_ASSIGN_MAPPING,
-     &         MUMPS_ASSIGN_PIVNUL_LIST,
-     &         MUMPS_ASSIGN_SYM_PERM,
-     &         MUMPS_ASSIGN_UNS_PERM,
-     &         MUMPS_ASSIGN_GLOB2LOC_RHS,
-     &         MUMPS_ASSIGN_GLOB2LOC_SOL
-      EXTERNAL MUMPS_NULLIFY_C_MAPPING,
-     &         MUMPS_NULLIFY_C_PIVNUL_LIST,
-     &         MUMPS_NULLIFY_C_SYM_PERM,
-     &         MUMPS_NULLIFY_C_UNS_PERM,
-     &         MUMPS_NULLIFY_C_GLOB2LOC_RHS,
-     &         MUMPS_NULLIFY_C_GLOB2LOC_SOL
-      EXTERNAL SMUMPS_ASSIGN_COLSCA,
-     &         SMUMPS_ASSIGN_ROWSCA,
-     &         SMUMPS_ASSIGN_ROWSCA_LOC,
-     &         SMUMPS_ASSIGN_COLSCA_LOC,
-     &         SMUMPS_ASSIGN_RHSINTR,
-     &         SMUMPS_ASSIGN_SINGULAR_VALUES
-      EXTERNAL SMUMPS_NULLIFY_C_COLSCA,
-     &         SMUMPS_NULLIFY_C_ROWSCA,
-     &         SMUMPS_NULLIFY_C_ROWSCA_LOC,
-     &         SMUMPS_NULLIFY_C_COLSCA_LOC,
-     &         SMUMPS_NULLIFY_C_RHSINTR,
-     &         SMUMPS_NULLIFY_C_SING_VALUES
+      EXTERNAL MUMPS_F77_LOCK, MUMPS_F77_UNLOCK
+      OUT_PTRS(1:12) = C_NULL_PTR
       IF (JOB == -1) THEN
+        CALL MUMPS_F77_LOCK()
         DO I = 1, SMUMPS_STRUC_ARRAY_SIZE
           IF ( .NOT. associated(mumps_par_array(I)%PTR) ) GOTO 10
         END DO
@@ -146,7 +137,7 @@ C
         DO I = 1, SMUMPS_STRUC_ARRAY_SIZE
           mumps_par_array_bis(I)%PTR=>mumps_par_array(I)%PTR
         ENDDO
-        IF (associated(mumps_par_array)) DEALLOCATE(mumps_par_array)
+C       Keep the old table storage: another thread may still scan it.
         mumps_par_array=>mumps_par_array_bis
         NULLIFY(mumps_par_array_bis)
         DO I = SMUMPS_STRUC_ARRAY_SIZE+1, SMUMPS_STRUC_ARRAY_SIZE +
@@ -172,6 +163,7 @@ C
         METIS_OPTIONS(1:40) = 0
         mumps_par_array(INSTANCE_NUMBER)%PTR%INSTANCE_NUMBER =
      &  INSTANCE_NUMBER
+        CALL MUMPS_F77_UNLOCK()
       END IF
       IF ( INSTANCE_NUMBER .LE. 0 .OR. INSTANCE_NUMBER .GT.
      &     SMUMPS_STRUC_ARRAY_SIZE ) THEN
@@ -377,66 +369,70 @@ C
       NPROW      = mumps_par%NPROW
       NPCOL      = mumps_par%NPCOL
       LD_RHSINTR = mumps_par%LD_RHSINTR
+C     Report the output pointers to mumps_c.c. The slot order is fixed and
+C     shared with src/mumps_c.c:
+C     1 MAPPING, 2 PIVNUL_LIST, 3 SYM_PERM, 4 UNS_PERM,
+C     5 GLOB2LOC_RHS, 6 GLOB2LOC_SOL, 7 COLSCA, 8 ROWSCA,
+C     9 COLSCA_LOC, 10 ROWSCA_LOC, 11 RHSINTR, 12 SINGULAR_VALUES
       IF ( associated (mumps_par%MAPPING) ) THEN
-         CALL MUMPS_ASSIGN_MAPPING(mumps_par%MAPPING(1))
+         OUT_PTRS(1) = C_LOC(mumps_par%MAPPING(1))
       ELSE
-         CALL MUMPS_NULLIFY_C_MAPPING()
+         OUT_PTRS(1) = C_NULL_PTR
       ENDIF
       IF ( associated (mumps_par%PIVNUL_LIST) ) THEN
-         CALL MUMPS_ASSIGN_PIVNUL_LIST(mumps_par%PIVNUL_LIST(1))
+         OUT_PTRS(2) = C_LOC(mumps_par%PIVNUL_LIST(1))
       ELSE
-         CALL MUMPS_NULLIFY_C_PIVNUL_LIST()
-      ENDIF
-      IF ( associated (mumps_par%SINGULAR_VALUES) ) THEN
-         CALL SMUMPS_ASSIGN_SINGULAR_VALUES(
-     &                  mumps_par%SINGULAR_VALUES(1))
-      ELSE
-         CALL SMUMPS_NULLIFY_C_SING_VALUES()
+         OUT_PTRS(2) = C_NULL_PTR
       ENDIF
       IF ( associated (mumps_par%SYM_PERM) ) THEN
-         CALL MUMPS_ASSIGN_SYM_PERM(mumps_par%SYM_PERM(1))
+         OUT_PTRS(3) = C_LOC(mumps_par%SYM_PERM(1))
       ELSE
-         CALL MUMPS_NULLIFY_C_SYM_PERM()
+         OUT_PTRS(3) = C_NULL_PTR
       ENDIF
       IF ( associated (mumps_par%UNS_PERM) ) THEN
-         CALL MUMPS_ASSIGN_UNS_PERM(mumps_par%UNS_PERM(1))
+         OUT_PTRS(4) = C_LOC(mumps_par%UNS_PERM(1))
       ELSE
-         CALL MUMPS_NULLIFY_C_UNS_PERM()
+         OUT_PTRS(4) = C_NULL_PTR
       ENDIF
-      IF ( associated (mumps_par%COLSCA_loc) ) THEN
-         CALL SMUMPS_ASSIGN_COLSCA_LOC(1)
+      IF ( associated(mumps_par%GLOB2LOC_RHS) ) THEN
+         OUT_PTRS(5) = C_LOC(mumps_par%GLOB2LOC_RHS(1))
       ELSE
-         CALL SMUMPS_NULLIFY_C_COLSCA_LOC()
+         OUT_PTRS(5) = C_NULL_PTR
       ENDIF
-      IF ( associated (mumps_par%ROWSCA_loc) ) THEN
-         CALL SMUMPS_ASSIGN_ROWSCA_LOC(1)
+      IF ( associated(mumps_par%GLOB2LOC_SOL) ) THEN
+         OUT_PTRS(6) = C_LOC(mumps_par%GLOB2LOC_SOL(1))
       ELSE
-         CALL SMUMPS_NULLIFY_C_ROWSCA_LOC()
+         OUT_PTRS(6) = C_NULL_PTR
       ENDIF
-      IF (associated( mumps_par%COLSCA )) THEN
-          CALL SMUMPS_ASSIGN_COLSCA(mumps_par%COLSCA(1))
+      IF ( associated(mumps_par%COLSCA) ) THEN
+         OUT_PTRS(7) = C_LOC(mumps_par%COLSCA(1))
       ELSE
-          CALL SMUMPS_NULLIFY_C_COLSCA()
+         OUT_PTRS(7) = C_NULL_PTR
       ENDIF
-      IF (associated( mumps_par%ROWSCA )) THEN
-          CALL SMUMPS_ASSIGN_ROWSCA(mumps_par%ROWSCA(1))
+      IF ( associated(mumps_par%ROWSCA) ) THEN
+         OUT_PTRS(8) = C_LOC(mumps_par%ROWSCA(1))
       ELSE
-          CALL SMUMPS_NULLIFY_C_ROWSCA()
+         OUT_PTRS(8) = C_NULL_PTR
       ENDIF
-      IF (associated( mumps_par%RHSINTR )) THEN
-          CALL SMUMPS_ASSIGN_RHSINTR(mumps_par%RHSINTR(1))
+      IF ( associated(mumps_par%COLSCA_loc) ) THEN
+         OUT_PTRS(9) = C_LOC(mumps_par%COLSCA_loc(1))
       ELSE
-          CALL SMUMPS_NULLIFY_C_RHSINTR()
+         OUT_PTRS(9) = C_NULL_PTR
       ENDIF
-      IF (associated(mumps_par%GLOB2LOC_RHS)) THEN
-          CALL MUMPS_ASSIGN_GLOB2LOC_RHS(mumps_par%GLOB2LOC_RHS(1))
+      IF ( associated(mumps_par%ROWSCA_loc) ) THEN
+         OUT_PTRS(10) = C_LOC(mumps_par%ROWSCA_loc(1))
       ELSE
-          CALL MUMPS_NULLIFY_C_GLOB2LOC_RHS()
+         OUT_PTRS(10) = C_NULL_PTR
       ENDIF
-      IF (associated(mumps_par%GLOB2LOC_SOL)) THEN
-          CALL MUMPS_ASSIGN_GLOB2LOC_SOL(mumps_par%GLOB2LOC_SOL(1))
+      IF ( associated(mumps_par%RHSINTR) ) THEN
+         OUT_PTRS(11) = C_LOC(mumps_par%RHSINTR(1))
       ELSE
-          CALL MUMPS_NULLIFY_C_GLOB2LOC_SOL()
+         OUT_PTRS(11) = C_NULL_PTR
+      ENDIF
+      IF ( associated(mumps_par%SINGULAR_VALUES) ) THEN
+         OUT_PTRS(12) = C_LOC(mumps_par%SINGULAR_VALUES(1))
+      ELSE
+         OUT_PTRS(12) = C_NULL_PTR
       ENDIF
       TMPDIRLEN=len_trim(mumps_par%OOC_TMPDIR)
       DO I=1,TMPDIRLEN
@@ -447,18 +443,17 @@ C
          OOC_PREFIX(I)=ichar(mumps_par%OOC_PREFIX(I:I))
       ENDDO
       IF ( JOB == -2 ) THEN
+         CALL MUMPS_F77_LOCK()
          IF (associated(mumps_par_array(INSTANCE_NUMBER)%PTR))THEN
            DEALLOCATE(mumps_par_array(INSTANCE_NUMBER)%PTR)
            NULLIFY   (mumps_par_array(INSTANCE_NUMBER)%PTR)
            N_INSTANCES = N_INSTANCES - 1
-           IF ( N_INSTANCES == 0 ) THEN
-             DEALLOCATE(mumps_par_array)
-             SMUMPS_STRUC_ARRAY_SIZE = 0
-           END IF
+C          Keep the table storage: concurrent scans may still read it.
          ELSE
            WRITE(*,*) "** Warning: instance already freed"
            WRITE(*,*) "            this should normally not happen."
          ENDIF
+         CALL MUMPS_F77_UNLOCK()
       END IF
       RETURN
       END SUBROUTINE SMUMPS_F77
