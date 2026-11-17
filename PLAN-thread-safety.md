@@ -403,6 +403,16 @@ taskset -c 0-7 hyperfine --warmup 3 --runs 20 \
 OMP_NUM_THREADS=4 MUMPS_NUM_WORKERS=8 ./c_concurrent_3d_bench
 ```
 
+### 10.3 L0-OMP large-problem regression test
+`examples/laplace_l0omp.c` is the Phase 0 L0-OMP/large-problem regression test: a 250×250 five-point Laplacian (62 500 unknowns, 311 500 nonzeros) solved through `dmumps_c` with MUMPS' own OpenMP threads. From the build tree:
+
+```bash
+make libdir=/tmp/ts-phase0b/install/lib/mumps laplace_l0omp
+OMP_NUM_THREADS=8 ./laplace_l0omp 8 2048
+```
+
+It prints `n=… nnz=… nthreads=… INFOG(1)=… res_inf=… xmax=… xsum=…` and exits non-zero when `res_inf >= 1e-10`. The existing examples and `russell_sparse`'s tests cannot catch this: their systems have 5 unknowns and are far too small to reach the dynamic-CB path, so an allocator or lifetime defect there stays invisible until a large problem is solved with MUMPS' internal OpenMP threads.
+
 ---
 
 ## 11. Build, Licensing, and Packaging

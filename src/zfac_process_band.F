@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: route the dynamic-CB move in ZMUMPS_PROCESS_DESC_BANDE through
+C          MUMPS_MALLOC_C and ZMUMPS_DM_SET_PTR only, so the block is always
+C          released with MUMPS_FREE_C. No public interface changed.
+C  =============================================================================
+C
       SUBROUTINE ZMUMPS_PROCESS_DESC_BANDE( MYID, BUFR, LBUFR, 
      &     LBUFR_BYTES,
      &     IWPOS, IWPOSCB,
@@ -28,6 +36,7 @@ C
      &                                 MUMPS_LR_FORCE_BFR
       USE ZMUMPS_LR_DATA_M, ONLY: ZMUMPS_BLR_INIT_FRONT,
      &                            ZMUMPS_BLR_SAVE_NFS4FATHER
+      USE ZMUMPS_DYNAMIC_MEMORY_M, ONLY : ZMUMPS_DM_SET_PTR
 #if ! defined(NO_FDM_DESCBAND)
       USE MUMPS_FAC_DESCBAND_DATA_M
 #endif
@@ -76,9 +85,7 @@ C
       LOGICAL :: run_on_gpu_slave, run_on_gpu_master
       INTEGER :: SIZE_OUTER, SIZE_INNER
 #endif
-#if ! defined(MUMPS_ALLOC_FROM_C) && ! defined(_CRAYFTN)
       COMPLEX(kind=8), POINTER, DIMENSION(:) :: DYNAMIC_CB
-#endif
       INTEGER(8) :: TMP_ADDRESS
       INTEGER :: allocok
       INODE = BUFR( 2 )
@@ -140,7 +147,11 @@ C
      &       COMP, LRLUS, KEEP8(67), IFLAG, IERROR
      &     )
         IF ( IFLAG .LT. 0 ) RETURN
-#if defined(MUMPS_ALLOC_FROM_C) || defined(_CRAYFTN)
+C           The block is reached only through the address kept in PTRAST, so the
+C           pointer used here is a C_F_POINTER view of memory owned by the C
+C           allocator: it must be allocated and freed with MUMPS_MALLOC_C /
+C           MUMPS_FREE_C and never with ALLOCATE/DEALLOCATE, which Fortran
+C           forbids on a C_F_POINTER target.
         CALL MUMPS_MALLOC_C( TMP_ADDRESS,
      &      LREQCB * int(KEEP(35),8) )
         IF (TMP_ADDRESS .EQ. 0_8) THEN
@@ -148,9 +159,6 @@ C
         ELSE 
           allocok=0
         ENDIF
-#else
-        ALLOCATE(DYNAMIC_CB(LREQCB), stat=allocok)
-#endif
         IF (allocok .GT. 0) THEN
           CALL ZMUMPS_FREE_BLOCK_CB_STATIC( .FALSE., MYID, N,
      &    IWPOSCB + 1, IW, LIW, LRLU, LRLUS, IPTRLU, IWPOSCB,
@@ -161,9 +169,7 @@ C
      &    KEEP8, IFLAG, IERROR,
      &    .TRUE., 
      &    .FALSE. ) 
-#if ! defined(MUMPS_ALLOC_FROM_C) && ! defined(_CRAYFTN)
-          CALL MUMPS_ADDR_C( DYNAMIC_CB(1), TMP_ADDRESS )
-#endif
+          CALL ZMUMPS_DM_SET_PTR( TMP_ADDRESS, LREQCB, DYNAMIC_CB )
           CALL MUMPS_STOREI8(LREQCB, IW(IWPOSCB+1+XXD))
           PTRIST(STEP(INODE)) = IWPOSCB + 1
           PTRAST(STEP(INODE)) = TMP_ADDRESS

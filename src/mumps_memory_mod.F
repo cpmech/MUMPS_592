@@ -28,15 +28,56 @@ C
       MODULE PROCEDURE MUMPS_DREALLOC, MUMPS_SREALLOC, MUMPS_ZREALLOC
       MODULE PROCEDURE MUMPS_CREALLOC
       END INTERFACE
-C     Byte sizes for the default integer, REAL, COMPLEX, and INTEGER(8)
-C     kinds (LP64 build, i.e. without -i8).
+C     Compile-time LP64 byte sizes for the default integer, REAL, COMPLEX,
+C     and INTEGER(8) kinds (i.e. a build without -i8/-r8).  ISIZE feeds
+C     allocation sizes and not only accounting, so the check in
+C     MUMPS_MEMORY_SET_DATA_SIZES makes an unsupported build fail loudly
+C     instead of under-allocating.
       INTEGER(8), PARAMETER, PRIVATE ::
      &  ISIZE = 4_8, I8SIZE = 8_8,
      &  SSIZE = 4_8, DSIZE = 8_8, CSIZE = 8_8, ZSIZE = 16_8
       CONTAINS
       SUBROUTINE MUMPS_MEMORY_SET_DATA_SIZES()
-C     The data sizes are compile-time PARAMETER constants now; this
-C     routine is kept for call compatibility and has nothing to set.
+C     The six constants above are compile-time LP64 sizes: compare them
+C     with the compiler's actual kinds and abort on the first mismatch.
+      USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_SIZEOF
+      INTEGER             :: I(2)
+      INTEGER(8)          :: I8(2)
+      REAL(kind(1.e0))    :: S(2)
+      DOUBLE PRECISION    :: D(2)
+      COMPLEX(kind(1.e0)) :: C(2)
+      COMPLEX(kind(1.d0)) :: Z(2)
+      EXTERNAL MUMPS_ABORT
+      IF (C_SIZEOF(I(1)) .NE. ISIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: ISIZE expected ',
+     &    ISIZE, ' but C_SIZEOF(INTEGER)=', C_SIZEOF(I(1))
+        CALL MUMPS_ABORT()
+      ENDIF
+      IF (C_SIZEOF(I8(1)) .NE. I8SIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: I8SIZE expected ',
+     &    I8SIZE, ' but C_SIZEOF(INTEGER(8))=', C_SIZEOF(I8(1))
+        CALL MUMPS_ABORT()
+      ENDIF
+      IF (C_SIZEOF(S(1)) .NE. SSIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: SSIZE expected ',
+     &    SSIZE, ' but C_SIZEOF(REAL)=', C_SIZEOF(S(1))
+        CALL MUMPS_ABORT()
+      ENDIF
+      IF (C_SIZEOF(D(1)) .NE. DSIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: DSIZE expected ',
+     &    DSIZE, ' but C_SIZEOF(DOUBLE PRECISION)=', C_SIZEOF(D(1))
+        CALL MUMPS_ABORT()
+      ENDIF
+      IF (C_SIZEOF(C(1)) .NE. CSIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: CSIZE expected ',
+     &    CSIZE, ' but C_SIZEOF(COMPLEX)=', C_SIZEOF(C(1))
+        CALL MUMPS_ABORT()
+      ENDIF
+      IF (C_SIZEOF(Z(1)) .NE. ZSIZE) THEN
+        WRITE(*,*) 'MUMPS_MEMORY_SET_DATA_SIZES: ZSIZE expected ',
+     &    ZSIZE, ' but C_SIZEOF(COMPLEX(8))=', C_SIZEOF(Z(1))
+        CALL MUMPS_ABORT()
+      ENDIF
       RETURN
       END SUBROUTINE MUMPS_MEMORY_SET_DATA_SIZES
       SUBROUTINE MUMPS_IREALLOC(ARRAY, MINSIZE, INFO, LP, FORCE, COPY,

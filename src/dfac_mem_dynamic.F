@@ -317,7 +317,11 @@ C
             ENDIF
           ENDIF
           IF ( MOVE2DYNAMIC ) THEN
-#if defined(MUMPS_ALLOC_FROM_C) || defined(_CRAYFTN)
+C           The dynamic block is reached only through the address kept in
+C           PAMASTER/PTRAST, so the pointer used here is a C_F_POINTER view of
+C           memory owned by the C allocator: it must be allocated and freed with
+C           MUMPS_MALLOC_C/MUMPS_FREE_C and never with ALLOCATE/DEALLOCATE,
+C           which Fortran forbids on a C_F_POINTER target.
             CALL MUMPS_MALLOC_C( TMP_ADDRESS,
      &      RCURRENT_SIZE * KEEP(35) )
             IF (TMP_ADDRESS .EQ. 0_8) THEN
@@ -325,9 +329,6 @@ C
             ELSE 
               allocok=0
             ENDIF
-#else
-            ALLOCATE(DYNAMIC_CB(RCURRENT_SIZE), stat=allocok)
-#endif
             IF (allocok .GT. 0) THEN
               IF ( (STRATEGY .NE. 1).OR. 
      &           (SIZER_NEEDED-LRLUS).GE.RCURRENT_SIZE) THEN
@@ -345,12 +346,8 @@ C
      &        LIW-ICURRENT+1, SIZEHOLE, KEEP(IXSZ))
             ENDIF
             CALL MUMPS_STOREI8(RCURRENT_SIZE,IW(ICURRENT+XXD))
-#if defined(MUMPS_ALLOC_FROM_C) || defined(_CRAYFTN)
             CALL DMUMPS_DM_SET_PTR( TMP_ADDRESS, RCURRENT_SIZE,
      &                              DYNAMIC_CB )
-#else
-            CALL MUMPS_ADDR_C(DYNAMIC_CB(1), TMP_ADDRESS)
-#endif
             IF (IS_PTRAST) THEN
               PTRAST(STEP(INODE)) = TMP_ADDRESS
             ELSE IF (IS_PAMASTER) THEN
@@ -520,11 +517,12 @@ C
             XXG_STATUS = MemNotPinned
       END SELECT
 #endif
-#if defined(MUMPS_ALLOC_FROM_C) || defined(_CRAYFTN)
+C           The dynamic block is reached only through the address kept in
+C           PAMASTER/PTRAST, so the pointer used here is a C_F_POINTER view of
+C           memory owned by the C allocator: it must be allocated and freed with
+C           MUMPS_MALLOC_C/MUMPS_FREE_C and never with ALLOCATE/DEALLOCATE,
+C           which Fortran forbids on a C_F_POINTER target.
       CALL MUMPS_FREE_C(DYNPTR(1))
-#else
-      DEALLOCATE(DYNPTR)
-#endif
       NULLIFY(DYNPTR)
       CALL MUMPS_DM_FAC_UPD_DYN_MEMCNTS (
      &           -SIZFR8, ATOMIC_UPDATES, KEEP8, IDUMMY, IDUMMY,
