@@ -35,6 +35,13 @@ C                    parallelism has to be off; 8 nested-in-1 deadlocks in
 C                    dmumps_fac_omp_m) and 0, the OpenMP default, with
 C                    nested = 1
 C
+C  Build: this example needs an OpenMP-enabled compiler and is therefore NOT built
+C  by `make d` -- some platform makefiles (macOS, with Accelerate) build MUMPS
+C  without -fopenmp, and the link then fails on omp_get_thread_num and friends.
+C  Build it on demand where OpenMP is available, after the libraries exist:
+C
+C     make dshared && make dorival_thread_safe
+C
 C  The test matrix is A = tridiag(-1, 4, -1) and the right-hand side is
 C  b = A * (1, ..., 1), so the exact solution is x = (1, ..., 1).  Each cycle
 C  checks max |x - 1| <= 1e-10; a wrong solution counts as a failure even when
