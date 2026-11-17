@@ -88,10 +88,14 @@ for entry in Makefile src include libseq PORD; do
     fi
 done
 
-# Root containers and writable prefixes do not need sudo; /usr/local does.
+# Root containers and writable prefixes do not need sudo; anything else does. Test the prefix
+# itself, not only its parent: a prefix whose parent directory does not exist yet (e.g.
+# /tmp/fresh/install) is not writable, but creating it needs no sudo at all.
 SUDO=""
-if [ "$EUID" != 0 ] && [ ! -w "$(dirname "$PREFIX")" ] && [ ! -w "$PREFIX" ]; then
-    SUDO="sudo"
+if [ "$EUID" != 0 ]; then
+    if ! mkdir -p "$PREFIX" 2>/dev/null || [ ! -w "$PREFIX" ]; then
+        SUDO="sudo"
+    fi
 fi
 
 # Orderings: the build files link METIS by name
