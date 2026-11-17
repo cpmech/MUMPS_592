@@ -161,8 +161,7 @@ OBJS_MOD_ARITHDEP = \
         $(ARITH)mumps_struc_def.o\
         $(ARITH)omp_tps_m.o\
         $(ARITH)sol_lr.o\
-        $(ARITH)sol_omp_m.o\
-        $(ARITH)static_ptr_m.o
+        $(ARITH)sol_omp_m.o
 
 OBJS_OTHER = \
         $(ARITH)ana_aux_ELT.o\
@@ -364,8 +363,7 @@ $(ARITH)fac_lr.o:               $(ARITH)lr_core.o\
                                 $(ARITH)mumps_lr_data_m.o\
                                 lr_stats.o
 
-$(ARITH)fac_mem_dynamic.o:      mumps_load.o\
-                                $(ARITH)static_ptr_m.o
+$(ARITH)fac_mem_dynamic.o:      mumps_load.o
 
 $(ARITH)fac_omp_m.o:            $(ARITH)fac_asm_master_m.o\
                                 $(ARITH)fac_asm_master_ELT_m.o\

@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: replaced the TMP_PTR static with C_LOC/C_F_POINTER for the two
+C          Schur complement C-interface cases.
+C          No public interface changed.
+C  =============================================================================
+C
 C  ===========================
 C  FORTRAN 90 Driver for ZMUMPS
 C       (MPI based code) 
@@ -19,7 +27,7 @@ C
       SUBROUTINE ZMUMPS( id )
       USE MUMPS_MEMORY_MOD
       USE ZMUMPS_STRUC_DEF
-      USE ZMUMPS_STATIC_PTR_M ! For Schur pointer
+      USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_PTR, C_LOC, C_F_POINTER
 #if ! defined(NO_SAVE_RESTORE)
       USE ZMUMPS_SAVE_RESTORE
 #endif
@@ -432,6 +440,7 @@ C
      &        KEEP77SAVE, KEEP78SAVE, KEEP83SAVE, KEEP91SAVE,
      &        KEEP172SAVE, KEEP178SAVE, KEEP117SAVE
       INTEGER(8) :: I8
+      TYPE(C_PTR) :: CPTR
       LOGICAL LANA, LFACTO, LSOLVE, PROK, LPOK, FLAG, PROKG
       LOGICAL NOERRORBEFOREPERM
       LOGICAL UNS_PERM_DONE,I_AM_SLAVE
@@ -1655,13 +1664,12 @@ C         -------------------------
 C              Called from C interface...
 C              Since id%SCHUR_CINTERFACE is of size 1,
 C              instruction below which causes bound check
-C              errors should be avoided. We cheat by first
-C              setting a static pointer with a routine with
-C              implicit interface, and then copying this pointer
-C              into id%SCHUR.
-               CALL ZMUMPS_SET_TMP_PTR(id%SCHUR_CINTERFACE(1),
-     &         int(id%SIZE_SCHUR,8)*int(id%SIZE_SCHUR,8))
-               CALL ZMUMPS_GET_TMP_PTR(id%SCHUR)
+C              errors should be avoided. We take the address
+C              of its first element with C_LOC and associate
+C              id%SCHUR through C_F_POINTER.
+               CPTR = C_LOC(id%SCHUR_CINTERFACE(1))
+               CALL C_F_POINTER(CPTR, id%SCHUR,
+     &           (/ int(id%SIZE_SCHUR,8)*int(id%SIZE_SCHUR,8) /))
                NULLIFY(id%SCHUR_CINTERFACE)
              ENDIF
              IF ( .NOT. associated (id%SCHUR)) THEN
@@ -2017,12 +2025,13 @@ C             bound check errors at runtime
 C             id%SCHUR=>id%SCHUR_CINTERFACE
 C    &          (1:id%SCHUR_LLD*(idintr%root%SCHUR_NLOC-1)+
 C    &          idintr%root%SCHUR_MLOC)
-C             Instead, we set a temporary
-C             pointer and then retrieve it
-              CALL ZMUMPS_SET_TMP_PTR(id%SCHUR_CINTERFACE(1),
-     &         int(id%SCHUR_LLD,8)*int(idintr%root%SCHUR_NLOC-1,8)+
-     &         int(idintr%root%SCHUR_MLOC,8))
-              CALL ZMUMPS_GET_TMP_PTR(id%SCHUR)
+C             Instead, we take the address of the first element
+C             with C_LOC and associate id%SCHUR with C_F_POINTER.
+              CPTR = C_LOC(id%SCHUR_CINTERFACE(1))
+              CALL C_F_POINTER(CPTR, id%SCHUR,
+     &          (/ int(id%SCHUR_LLD,8)*
+     &             int(idintr%root%SCHUR_NLOC-1,8)+
+     &             int(idintr%root%SCHUR_MLOC,8) /))
               NULLIFY(id%SCHUR_CINTERFACE)
             ENDIF
 C           Check that SCHUR_LLD is large enough

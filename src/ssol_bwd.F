@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: replaced the SET/GET static-pointer hand-off by a direct pointer
+C          association to the TARGET dummy argument A.
+C          No public interface changed.
+C  =============================================================================
+C
       SUBROUTINE SMUMPS_SOL_S(N, A, LA, IW, LIW, W, LWC,
      &    NRHS, 
      &    RHSINTR, LRHSINTR, POSINRHSINTR_BWD,
@@ -31,8 +39,6 @@ C
      &    , L0_OMP_MAPPING, LL0_OMP_MAPPING,
      &    L0_OMP_FACTORS, LL0_OMP_FACTORS
      &    )
-      USE SMUMPS_STATIC_PTR_M, ONLY : SMUMPS_SET_STATIC_PTR,
-     &                                SMUMPS_GET_TMP_PTR
       USE SMUMPS_INTR_TYPES, ONLY : SMUMPS_L0OMPFAC_T
       IMPLICIT NONE
       INTEGER MTYPE
@@ -54,7 +60,8 @@ C
       INTEGER(8) :: PTRACB(KEEP(28))
       INTEGER(8) :: PTRFAC(KEEP(28))
       INTEGER NRHS
-      REAL A(LA), W(LWC)
+      REAL, TARGET :: A(LA)
+      REAL W(LWC)
       REAL W2(KEEP(133))
       INTEGER IW(LIW),IWCB(LIWW)
       INTEGER STEP(N), FRERE(KEEP(28)),DAD(KEEP(28)),FILS(N)
@@ -163,8 +170,7 @@ C
               UNDERL0MAP = 0
             ENDIF
             IF (UNDERL0MAP .EQ. 0 .OR. KEEP(201).GT.0) THEN
-              CALL SMUMPS_SET_STATIC_PTR(A)
-              CALL SMUMPS_GET_TMP_PTR(A_PTR)
+              A_PTR => A
               LA_PTR = LA
             ELSE
               A_PTR => L0_OMP_FACTORS(UNDERL0MAP)%A

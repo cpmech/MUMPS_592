@@ -13,6 +13,14 @@
  *  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
  *
  */
+/*
+ *  ===========================================================================
+ *  Modification for thread safety (Phase 0), 2026-11-17
+ *  Author: Dorival Pedroso (Kleo completed the edit)
+ *  Nature: removed the now-unused <arith>MUMPS_SET_TMP_PTR_C bridge and its
+ *          macros. No public interface changed.
+ *  ===========================================================================
+ */
 /* Header used for debug purpose only
 #include <stdio.h>
 */
@@ -330,24 +338,6 @@ void MUMPS_CALL
 MUMPS_NULLIFY_C_SING_VALUES()
 {
   MUMPS_SINGULAR_VALUES_STATIC = 0;
-}
-/* FIXME: move CMUMPS_SET_TMP_PTR to another file */
-#define MUMPS_SET_TMP_PTR \
-    F_SYM_ARITH(set_tmp_ptr,SET_TMP_PTR) /* Fortran routine <arith>MUMPS_SET_TMP_PTR called from C */
-#define MUMPS_SET_TMP_PTR_C \
-    F_SYM_ARITH(set_tmp_ptr_c,SET_TMP_PTR_C) /* C routine <arith>MUMPS_SET_TMP_PTR_C called from Fortran */
-void MUMPS_SET_TMP_PTR(void *x, MUMPS_INT8 * size);
-void MUMPS_CALL MUMPS_SET_TMP_PTR_C(MUMPS_INT8 *addr_ptr, MUMPS_INT8 *size) /* called from Fortran */
-{
-/*
-    MUMPS_SET_TMP_PTR sets a static Fortran pointer from an address and a size:
-    size is passed by address
-    The address passed in *addr_ptr, however, *addr_ptr is a MUMPS_INT8
-    addr_ptr is the pointer to the address we want to pass
-    We cast addr_ptr to a pointer to an address before taking the content
-     *(void *)addr_ptr)
-*/
-    MUMPS_SET_TMP_PTR(*(void**)addr_ptr, size);  /* calls Fortran */
 }
 #if MUMPS_ARITH == MUMPS_ARITH_s
 # define mumps_c       smumps_c

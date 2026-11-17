@@ -11,6 +11,14 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: replaced the process-global TMP_PTR hand-off in CMUMPS_DM_SET_PTR
+C          with a standard ISO_C_BINDING C_F_POINTER association.
+C          No public interface changed.
+C  =============================================================================
+C
       MODULE CMUMPS_DYNAMIC_MEMORY_M
       CONTAINS
       SUBROUTINE CMUMPS_DM_ALLOC_S_WK(S, MAXS, allocok,
@@ -472,7 +480,7 @@ C
       RETURN
       END SUBROUTINE CMUMPS_DM_FREEALLDYNAMICCB
       SUBROUTINE CMUMPS_DM_SET_PTR(ADDRESS, SIZFR8, CBPTR)
-      USE CMUMPS_STATIC_PTR_M, ONLY : CMUMPS_GET_TMP_PTR
+      USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_PTR, C_F_POINTER
       IMPLICIT NONE
       INTEGER(8), INTENT(IN) :: ADDRESS, SIZFR8
 #if defined(MUMPS_NOF2003)
@@ -480,10 +488,9 @@ C
 #else
       COMPLEX, DIMENSION(:), POINTER, INTENT(out) :: CBPTR
 #endif
-!$OMP CRITICAL(STATIC_PTR_ACCESS)
-      CALL CMUMPS_SET_TMP_PTR_C( ADDRESS, SIZFR8 )
-      CALL CMUMPS_GET_TMP_PTR( CBPTR )
-!$OMP END CRITICAL(STATIC_PTR_ACCESS)
+      TYPE(C_PTR) :: CPTR
+      CPTR = TRANSFER(ADDRESS, CPTR)
+      CALL C_F_POINTER(CPTR, CBPTR, (/ SIZFR8 /))
       RETURN
       END SUBROUTINE CMUMPS_DM_SET_PTR
       SUBROUTINE CMUMPS_DM_FREE_BLOCK( XXG_STATUS, DYNPTR, SIZFR8,

@@ -11,6 +11,13 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
+C  =============================================================================
+C  Modification for thread safety (Phase 0), 2026-11-17
+C  Author: Dorival Pedroso (Kleo completed the edit)
+C  Nature: removed the now-unused DMUMPS_SET_TMP_PTR helper.
+C          No public interface changed.
+C  =============================================================================
+C
       SUBROUTINE DMUMPS_COMPRESS_LU(SIZE_INPLACE,
      &MYID,N,IOLDPS,TYPE,IW, LIW, A, LA,
      &POSFAC, LRLU, LRLUS, IWPOS, PTRAST, PTRFAC, STEP, KEEP,KEEP8,
@@ -2123,13 +2130,6 @@ C
       END IF
       RETURN
       END SUBROUTINE DMUMPS_COPYI8SIZE
-      SUBROUTINE DMUMPS_SET_TMP_PTR( THE_ADDRESS, THE_SIZE8 )
-      USE DMUMPS_STATIC_PTR_M
-      INTEGER(8), INTENT(IN) :: THE_SIZE8
-      DOUBLE PRECISION,    INTENT(IN) :: THE_ADDRESS(THE_SIZE8)
-      CALL DMUMPS_SET_STATIC_PTR(THE_ADDRESS(1:THE_SIZE8)) 
-      RETURN
-      END SUBROUTINE DMUMPS_SET_TMP_PTR
       SUBROUTINE DMUMPS_OOC_IO_LU_PANEL_I
      &     ( STRAT, TYPEFile, 
      &     AFAC, LAFAC, MonBloc,
