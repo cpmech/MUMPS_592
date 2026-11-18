@@ -14,28 +14,27 @@
  *
  */
 /*
- *  ===========================================================================
- *  Modification for thread safety (Phase 0), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: removed the now-unused <arith>MUMPS_SET_TMP_PTR_C bridge and its
- *          macros. No public interface changed.
- *  ===========================================================================
- */
-/*
- *  ===========================================================================
- *  Modification for thread safety (Phase 0), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: replaced the per-arithmetic output-pointer statics and the shared
- *          getter/setter hand-off with one caller-owned slot array passed to
- *          [SDCZ]MUMPS_F77 and read back after the call.
- *          No public interface changed.
- *  ===========================================================================
+ *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+ *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
  */
 /* Header used for debug purpose only
 #include <stdio.h>
 */
 #include <string.h>
 #include "mumps_common.h"
+#if defined(_OPENMP)
+# if defined(__has_include)
+#  if __has_include(<omp.h>)
+#   include <omp.h>
+#  else
+/* Some compilers accept -fopenmp without shipping the runtime header. */
+extern int omp_get_max_threads(void);
+extern void omp_set_num_threads(int);
+#  endif
+# else
+#  include <omp.h>
+# endif
+#endif
 #if MUMPS_ARITH == MUMPS_ARITH_s
 # include "smumps_c.h"
 # define MUMPS_REAL    SMUMPS_REAL
@@ -257,8 +256,9 @@ MUMPS_F77( MUMPS_INT      *job,
 # define MUMPS_STRUC_C ZMUMPS_STRUC_C
 #endif
 static void
-mumps_c_body(MUMPS_STRUC_C * mumps_par)
+mumps_c_body(void *raw)
 {
+    MUMPS_STRUC_C *mumps_par = (MUMPS_STRUC_C *) raw;
     /*
      * The following local variables will 
      *  be passed to the F77 interface.
@@ -326,6 +326,10 @@ mumps_c_body(MUMPS_STRUC_C * mumps_par)
     /* Initialize pointers to zero for job == -1 */
     if ( mumps_par->job == -1 )
       { /* job = -1: we just reset all pointers to 0 */
+        /* Define the two status entries that a failed dispatch does not
+         * overwrite, so a JOB=-1 caller never reads uninitialized memory. */
+        mumps_par->info[0] = 0;
+        mumps_par->infog[1] = 0;
         mumps_par->irn=0; mumps_par->jcn=0; mumps_par->a=0; mumps_par->rhs=0; mumps_par->wk_user=0;
         mumps_par->redrhs=0;
         mumps_par->rowind=0; mumps_par->colind=0; mumps_par->pivots=0;
@@ -597,17 +601,36 @@ mumps_c_body(MUMPS_STRUC_C * mumps_par)
  * Thin public entry point.  The whole call is handed to the persistent
  * worker; on success the caller still sees exactly what MUMPS wrote in
  * infog/infog8 (and the other output arrays).  Only a dispatcher failure is
- * reported here, since in that case the Fortran layer never ran.
+ * reported here, since in that case the Fortran layer never ran: INFO and
+ * INFOG both carry MUMPS_TS_DISPATCH_ERROR (-99), a value outside the
+ * documented negative INFO(1) codes, with INFO(2)=INFOG(2)=0.  In
+ * particular it is not -9, which asks callers to retry with a larger
+ * workarray S.
+ *
+ * ICNTL(16) <= 0 means "use the caller's OpenMP setting".  Capture that
+ * setting here, on the calling thread, and let the worker apply it for the
+ * duration of the call.
  */
 void MUMPS_CALL
 mumps_c(MUMPS_STRUC_C * mumps_par)
 {
-    if (mumps_ts_dispatch(MUMPS_ARITH, mumps_par,
-                          (mumps_ts_fn) mumps_c_body) != 0)
+#if defined(_OPENMP)
+    int caller_omp_max =
+        (mumps_par != NULL && mumps_par->job != -1 &&
+         mumps_par->icntl[15] <= 0)
+            ? omp_get_max_threads() : 0;
+#else
+    int caller_omp_max = 0;
+#endif
+    if (mumps_ts_dispatch(MUMPS_ARITH, mumps_par, mumps_c_body,
+                          caller_omp_max) != 0)
       {
         if (mumps_par != NULL)
           {
+            mumps_par->info[0] = MUMPS_TS_DISPATCH_ERROR;
+            mumps_par->info[1] = 0;
             mumps_par->infog[0] = MUMPS_TS_DISPATCH_ERROR;
+            mumps_par->infog[1] = 0;
           }
       }
 }

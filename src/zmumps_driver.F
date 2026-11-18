@@ -11,21 +11,8 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  =============================================================================
-C  Modification for thread safety (Phase 0), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: replaced the TMP_PTR static with C_LOC/C_F_POINTER for the two
-C          Schur complement C-interface cases.
-C          No public interface changed.
-C  =============================================================================
-C
-C  =============================================================================
-C  Modification for thread safety (Phase 1), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: routed the Fortran entry CALL ZMUMPS(id) through the persistent
-C          single-worker dispatcher.
-C          No public interface changed.
-C  =============================================================================
+C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
 C  ===========================
 C  FORTRAN 90 Driver for ZMUMPS
@@ -33,20 +20,40 @@ C       (MPI based code)
 C  ===========================
 C
       SUBROUTINE ZMUMPS( id )
+!$    USE OMP_LIB
 C     Routes the Fortran entry through the persistent MUMPS worker thread so
 C     that CALL ZMUMPS(id) is safe from several callers at once, exactly like
 C     the C entry.  A caller already running on the worker (the C path) is
 C     executed inline by the dispatcher, so this never queues behind itself.
-C     The first dispatcher argument is the arithmetic code for double
-C     precision complex, 8 (include/mumps_c_types.h: s=1, d=2, c=4, z=8).
+C     The dispatcher argument is the arithmetic code for double precision
+C     complex, 8 (include/mumps_c_types.h: s=1, d=2, c=4, z=8), passed
+C     through a variable because Fortran passes arguments by reference.
+C     Under MUMPS_MPI the call runs directly on the calling (MPI_Init)
+C     thread.  IMAX carries ICNTL(16) <= 0 callers' omp_get_max_threads()
+C     to the worker; 0 leaves the worker's OpenMP setting alone.
       USE ZMUMPS_STRUC_DEF
       TYPE (ZMUMPS_STRUC) :: id
-      INTEGER MUMPS_TS_DISPATCH_F77, STATUS
+      INTEGER(4) MUMPS_TS_DISPATCH_F77
+      INTEGER(4) STATUS
+      INTEGER(4) IARITH
+      INTEGER(4) IMAX
       EXTERNAL ZMUMPS_TS_INNER, MUMPS_TS_DISPATCH_F77
-      STATUS = MUMPS_TS_DISPATCH_F77(8, id, ZMUMPS_TS_INNER)
+      IMAX = 0
+!$    IF (id%JOB .NE. -1) THEN
+!$      IF (id%ICNTL(16) .LE. 0) IMAX = OMP_GET_MAX_THREADS()
+!$    END IF
+#if defined(MUMPS_MPI)
+      CALL ZMUMPS_TS_INNER( id )
+#else
+      IARITH = 8
+      STATUS = MUMPS_TS_DISPATCH_F77(IARITH, id, ZMUMPS_TS_INNER, IMAX)
       IF (STATUS .NE. 0) THEN
-        id%INFOG(1) = -9
+        id%INFO(1) = -99
+        id%INFO(2) = 0
+        id%INFOG(1) = -99
+        id%INFOG(2) = 0
       END IF
+#endif
       RETURN
       END SUBROUTINE ZMUMPS
 C

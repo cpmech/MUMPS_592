@@ -11,13 +11,8 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  =============================================================================
-C  Modification for thread safety (Phase 0), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: route the dynamic-CB move in CMUMPS_PROCESS_DESC_BANDE through
-C          MUMPS_MALLOC_C and CMUMPS_DM_SET_PTR only, so the block is always
-C          released with MUMPS_FREE_C. No public interface changed.
-C  =============================================================================
+C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       SUBROUTINE CMUMPS_PROCESS_DESC_BANDE( MYID, BUFR, LBUFR, 
      &     LBUFR_BYTES,

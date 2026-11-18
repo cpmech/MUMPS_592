@@ -11,13 +11,8 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  =============================================================================
-C  Modification for thread safety (Phase 0), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: made the byte-size module variables compile-time PARAMETER
-C          constants, removing the race in MUMPS_MEMORY_SET_DATA_SIZES.
-C          No public interface changed.
-C  =============================================================================
+C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       MODULE MUMPS_MEMORY_MOD
       INTERFACE MUMPS_DEALLOC
@@ -28,18 +23,33 @@ C
       MODULE PROCEDURE MUMPS_DREALLOC, MUMPS_SREALLOC, MUMPS_ZREALLOC
       MODULE PROCEDURE MUMPS_CREALLOC
       END INTERFACE
-C     Compile-time LP64 byte sizes for the default integer, REAL, COMPLEX,
-C     and INTEGER(8) kinds (i.e. a build without -i8/-r8).  ISIZE feeds
-C     allocation sizes and not only accounting, so the check in
-C     MUMPS_MEMORY_SET_DATA_SIZES makes an unsupported build fail loudly
-C     instead of under-allocating.
+C     The six constants follow the kinds this build actually uses: the
+C     default INTEGER (32-bit or 64-bit with -i8), INTEGER(8), REAL and
+C     COMPLEX (single or double precision as configured), and COMPLEX(8).
+C     STORAGE_SIZE evaluates at compile time, so the constants always match
+C     the compiler; ISIZE also feeds allocation sizes.  The runtime C_SIZEOF
+C     check in MUMPS_MEMORY_SET_DATA_SIZES is a guard, not a policy, and
+C     can no longer fail.
+      INTEGER,          PARAMETER, PRIVATE :: MUMPS_DUMMY_I = 0
+      REAL,             PARAMETER, PRIVATE :: MUMPS_DUMMY_S = 0.0E0
+      DOUBLE PRECISION, PARAMETER, PRIVATE :: MUMPS_DUMMY_D = 0.0D0
+      COMPLEX,          PARAMETER, PRIVATE :: MUMPS_DUMMY_C =
+     &  (0.0E0, 0.0E0)
+      COMPLEX(8),       PARAMETER, PRIVATE :: MUMPS_DUMMY_Z =
+     &  (0.0D0, 0.0D0)
+      INTEGER(8),       PARAMETER, PRIVATE :: MUMPS_DUMMY_I8 = 0_8
       INTEGER(8), PARAMETER, PRIVATE ::
-     &  ISIZE = 4_8, I8SIZE = 8_8,
-     &  SSIZE = 4_8, DSIZE = 8_8, CSIZE = 8_8, ZSIZE = 16_8
+     &  ISIZE  = STORAGE_SIZE(MUMPS_DUMMY_I, 8) / 8_8,
+     &  I8SIZE = STORAGE_SIZE(MUMPS_DUMMY_I8, 8) / 8_8,
+     &  SSIZE  = STORAGE_SIZE(MUMPS_DUMMY_S, 8) / 8_8,
+     &  DSIZE  = STORAGE_SIZE(MUMPS_DUMMY_D, 8) / 8_8,
+     &  CSIZE  = STORAGE_SIZE(MUMPS_DUMMY_C, 8) / 8_8,
+     &  ZSIZE  = STORAGE_SIZE(MUMPS_DUMMY_Z, 8) / 8_8
       CONTAINS
       SUBROUTINE MUMPS_MEMORY_SET_DATA_SIZES()
-C     The six constants above are compile-time LP64 sizes: compare them
-C     with the compiler's actual kinds and abort on the first mismatch.
+C     The constants above follow this build's kinds: compare them with
+C     C_SIZEOF as a guard.  Since both sides are compile-time values, a
+C     mismatch cannot occur.
       USE, INTRINSIC :: ISO_C_BINDING, ONLY : C_SIZEOF
       INTEGER             :: I(2)
       INTEGER(8)          :: I8(2)

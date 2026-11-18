@@ -14,19 +14,17 @@
  *
  */
 /*
- *  ===========================================================================
- *  Modification for thread safety (Phase 0), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: removed the six process-global output-pointer statics and their
- *          twelve getter/setter routines, and added the process-wide mutex
- *          used by the [SDCZ]MUMPS_F77 instance table.
- *  ===========================================================================
+ *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+ *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
  */
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <pthread.h>
+#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
+# include <pthread.h>
+#endif
 #include "mumps_common.h"
+#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
 /*
  * One process-wide lock for the [SDCZ]MUMPS_F77 instance tables. It only
  * guards table scans/growth and instance creation/destruction; solver calls
@@ -51,6 +49,18 @@ MUMPS_F77_UNLOCK(void)
         abort();
       }
 }
+#else
+/* Thread safety needs pthreads; without them the instance-table lock is a
+ * no-op (same convention as mumps_io.c and mumps_register_thread.c). */
+void MUMPS_CALL
+MUMPS_F77_LOCK(void)
+{
+}
+void MUMPS_CALL
+MUMPS_F77_UNLOCK(void)
+{
+}
+#endif
 void MUMPS_CALL
 MUMPS_ICOPY_32TO64_64C_IP_C(MUMPS_INT *inouttab, MUMPS_INT8 *sizetab)
 /* Copies in-place *sizetab int values starting at address inouttab

@@ -14,12 +14,8 @@
  *
  */
 /*
- *  ===========================================================================
- *  Modification for thread safety (Phase 1), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: declared the thread-safety capability symbol; the structures and
- *          the [sdcz]mumps_c prototypes are unchanged.
- *  ===========================================================================
+ *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+ *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
  */
 
 
@@ -27,6 +23,7 @@
 #define MUMPS_C_TYPES_H
 
 #include <stdint.h>
+#include "mumps_compat.h"
 
 /* mumps_int_def.h will define either MUMPS_INTSIZE32 (default)
    or MUMPS_INTSIZE64 (if compilation is with -DINTSIZE64 to
@@ -80,16 +77,20 @@ typedef struct {double r,i;} mumps_double_complex;
 
 /* Thread-safety capability (additive; the structures and the [sdcz]mumps_c
  * prototypes are unchanged).
- *   1 = every entry point may be called from any thread: calls are dispatched
- *       internally to a persistent MUMPS worker.
- *   0 is never returned by this library. Source-level clients may test
- *       MUMPS_THREAD_SAFE_VERSION at compile time and mumps_is_thread_safe()
- *       at run time. */
+ *   Distinct instances may be used concurrently from any threads, but one
+ *   MUMPS_STRUC_C must not be accessed concurrently.
+ *   1 = calls are dispatched internally to a persistent MUMPS worker.
+ *   0 = calls run on the calling thread and the caller must serialize them:
+ *       the library was built without pthread support, or for MPI.
+ * Consecutive dispatch is active only when MUMPS is built with the
+ * sequential MPI stub.  Source-level clients may test
+ * MUMPS_THREAD_SAFE_VERSION at compile time and mumps_is_thread_safe() at
+ * run time. */
 #define MUMPS_THREAD_SAFE_VERSION 1
 #ifdef __cplusplus
 extern "C" {
 #endif
-int mumps_is_thread_safe(void);
+int MUMPS_CALL mumps_is_thread_safe(void);
 #ifdef __cplusplus
 }
 #endif

@@ -1,5 +1,8 @@
 C
-C  DORIVAL_THREAD_SAFE: several MUMPS instances running from several threads
+C  This file is part of MUMPS 5.9.2, released
+C  on Fri Nov 13 10:00:55 UTC 2026
+C
+C  THREAD_SAFE_TEST: several MUMPS instances running from several threads
 C
 C  This is the reproducer for the MUMPS thread-safety defect.  Every thread of an
 C  OpenMP team owns its own DMUMPS instance and churns the whole lifecycle
@@ -10,7 +13,7 @@ C  return wrong results; a patched MUMPS must pass with every thread count.
 C
 C  Usage:
 C
-C     ./dorival_thread_safe [nthreads] [niter] [n] [locked] [nested]
+C     ./thread_safe_test [nthreads] [niter] [n] [locked] [nested]
 C                           [mumps_threads]
 C
 C     nthreads       caller threads (default 8)
@@ -22,8 +25,7 @@ C                    1  a named critical section around every CALL DMUMPS,
 C                       i.e. the calls are serialized but the phases of
 C                       different instances still interleave
 C                    2  a named critical section around the whole cycle,
-C                       i.e. one instance at a time end to end (what the
-C                       russell_sparse/pmsim client lock does)
+C                       i.e. one instance at a time end to end
 C     nested         1 enables OpenMP nesting (OMP_SET_MAX_ACTIVE_LEVELS(2)),
 C                    so every caller is the master of its own MUMPS team;
 C                    0 keeps MUMPS's parallel regions at one thread inside
@@ -40,7 +42,7 @@ C  by `make d` -- some platform makefiles (macOS, with Accelerate) build MUMPS
 C  without -fopenmp, and the link then fails on omp_get_thread_num and friends.
 C  Build it on demand where OpenMP is available, after the libraries exist:
 C
-C     make dshared && make dorival_thread_safe
+C     make dshared && make thread_safe_test
 C
 C  The test matrix is A = tridiag(-1, 4, -1) and the right-hand side is
 C  b = A * (1, ..., 1), so the exact solution is x = (1, ..., 1).  Each cycle
@@ -64,30 +66,29 @@ C
 C  The OpenMP-team failure (threadprivate caches past libiomp5's
 C  __kmp_default_tp_capacity, __kmp_reap_worker) needs plain OS caller threads,
 C  which an OpenMP team does not provide: nested = 1 with 10 callers at
-C  OMP_NUM_THREADS = 16 still passes here.  The Rust stress test in
-C  russell_sparse covers that path; this example reproduces the
+C  OMP_NUM_THREADS = 16 still passes here.  This example reproduces the
 C  concurrent-entry corruption.
 C
-C  Build against the installed library (from this directory):
+C  Build against an in-tree or installed library (from this directory):
 C
-C     ifx -O -qopenmp -I/usr/local/include/mumps -I../libseq
-C         dorival_thread_safe.F -o dorival_thread_safe
-C         -L/usr/local/lib/mumps -ldmumps -lsmumps
+C     ifx -O -qopenmp -I../include -I../libseq
+C         thread_safe_test.F -o thread_safe_test
+C         -L../lib -ldmumps -lsmumps
 C         -lmumps_common -lpord -lmpiseq -lmetis
 C         -L$MKLROOT/lib/intel64 -lmkl_intel_lp64 -lmkl_intel_thread
 C         -lmkl_core -lpthread
 C
-C  or `make dorival_thread_safe` after building the library tree.
+C  or `make thread_safe_test` after building the library tree.
 C
 C  Examples:
 C
-C     timeout 60 ./dorival_thread_safe 8 20 100       # the raw defect
-C     timeout 60 ./dorival_thread_safe 8 20 100 1     # per-call mutex
-C     timeout 60 ./dorival_thread_safe 8 20 100 2     # per-cycle mutex
-C     OMP_NUM_THREADS=16 timeout 60 ./dorival_thread_safe 10 10 100 2 1
+C     timeout 60 ./thread_safe_test 8 20 100       # the raw defect
+C     timeout 60 ./thread_safe_test 8 20 100 1     # per-call mutex
+C     timeout 60 ./thread_safe_test 8 20 100 2     # per-cycle mutex
+C     OMP_NUM_THREADS=16 timeout 60 ./thread_safe_test 10 10 100 2 1
 C                                            # nested teams, tp_capacity
 C
-      PROGRAM DORIVAL_THREAD_SAFE
+      PROGRAM THREAD_SAFE_TEST
       USE OMP_LIB
       IMPLICIT NONE
       INCLUDE 'mpif.h'

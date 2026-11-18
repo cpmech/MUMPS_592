@@ -11,15 +11,8 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  =============================================================================
-C  Modification for thread safety (Phase 0), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: replaced the process-global MUMPS_ASSIGN_* pointer hand-off with a
-C          caller-owned OUT_PTRS C_PTR array, and serialized the JOB=-1
-C          instance-table update with the shared MUMPS_F77_LOCK. Old table
-C          storage is retained so no live instance pointer is invalidated.
-C          No public interface changed.
-C  =============================================================================
+C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       SUBROUTINE SMUMPS_F77( JOB, SYM, PAR, COMM_F77, N, NBLK, ICNTL,
      &     CNTL, KEEP, DKEEP, KEEP8, NZ, NNZ, IRN, IRNhere, JCN,
@@ -137,7 +130,9 @@ C
         DO I = 1, SMUMPS_STRUC_ARRAY_SIZE
           mumps_par_array_bis(I)%PTR=>mumps_par_array(I)%PTR
         ENDDO
-C       Keep the old table storage: another thread may still scan it.
+C       The old containers are all copied and every reader of the table is
+C       inside MUMPS_F77_LOCK, so the old descriptor can be released here.
+        IF (ASSOCIATED(mumps_par_array)) DEALLOCATE(mumps_par_array)
         mumps_par_array=>mumps_par_array_bis
         NULLIFY(mumps_par_array_bis)
         DO I = SMUMPS_STRUC_ARRAY_SIZE+1, SMUMPS_STRUC_ARRAY_SIZE +
@@ -165,6 +160,7 @@ C       Keep the old table storage: another thread may still scan it.
      &  INSTANCE_NUMBER
         CALL MUMPS_F77_UNLOCK()
       END IF
+      CALL MUMPS_F77_LOCK()
       IF ( INSTANCE_NUMBER .LE. 0 .OR. INSTANCE_NUMBER .GT.
      &     SMUMPS_STRUC_ARRAY_SIZE ) THEN
         WRITE(*,*) ' ** Instance Error 1 in SMUMPS_F77',
@@ -178,6 +174,7 @@ C       Keep the old table storage: another thread may still scan it.
         CALL MUMPS_ABORT()
       END IF
       mumps_par => mumps_par_array(INSTANCE_NUMBER)%PTR
+      CALL MUMPS_F77_UNLOCK()
       mumps_par%SYM  = SYM
       mumps_par%PAR  = PAR
       mumps_par%JOB  = JOB
@@ -448,11 +445,16 @@ C     9 COLSCA_LOC, 10 ROWSCA_LOC, 11 RHSINTR, 12 SINGULAR_VALUES
            DEALLOCATE(mumps_par_array(INSTANCE_NUMBER)%PTR)
            NULLIFY   (mumps_par_array(INSTANCE_NUMBER)%PTR)
            N_INSTANCES = N_INSTANCES - 1
-C          Keep the table storage: concurrent scans may still read it.
          ELSE
            WRITE(*,*) "** Warning: instance already freed"
            WRITE(*,*) "            this should normally not happen."
          ENDIF
+C        Release the final table as well, so JOB=-2 leaves nothing behind.
+         IF (N_INSTANCES .EQ. 0) THEN
+           IF (ASSOCIATED(mumps_par_array)) DEALLOCATE(mumps_par_array)
+           NULLIFY(mumps_par_array)
+           SMUMPS_STRUC_ARRAY_SIZE = 0
+         END IF
          CALL MUMPS_F77_UNLOCK()
       END IF
       RETURN

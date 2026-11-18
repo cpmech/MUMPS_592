@@ -1,9 +1,15 @@
 /*
+ *
+ *  This file is part of MUMPS 5.9.2, released
+ *  on Fri Nov 13 10:00:55 UTC 2026
+ *
+ */
+/*
  * C churn test for the persistent-worker dispatcher.
  *
  * 32 plain POSIX threads each own a DMUMPS_STRUC_C and run 20 complete
  * lifecycles (JOB = -1, 1, 2, 3, -2) of the same small SPD system.  Every
- * MUMPS call goes through the persistent worker installed by the Phase 1
+ * MUMPS call goes through the persistent worker installed by the library's
  * dispatcher, so the Fortran solver never sees two caller threads at once.
  *
  * The test matrix is the N x N tridiagonal A = tridiag(-1, 4, -1) and the
@@ -18,7 +24,10 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
-#include <pthread.h>
+#include "mumps_compat.h"
+#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
+# include <pthread.h>
+#endif
 #include "mpi.h"
 #include "dmumps_c.h"
 
@@ -82,6 +91,7 @@ check_job(DMUMPS_STRUC_C *id, thread_result *r, int cycle, int job)
     return 0;
 }
 
+#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
 static void *
 churn_worker(void *arg)
 {
@@ -177,10 +187,17 @@ churn_worker(void *arg)
 
     return NULL;
 }
+#endif /* ! MUMPS_WIN32 && ! WITHOUT_PTHREAD */
 
 int
 main(int argc, char **argv)
 {
+#if defined(MUMPS_WIN32) || defined(WITHOUT_PTHREAD)
+    (void) argc;
+    (void) argv;
+    printf("c_thread_safe_test: skipped (pthread support is not available)\n");
+    return 0;
+#else
     pthread_t tids[NTHREADS];
     thread_result results[NTHREADS];
     int i, created = 0, failures = 0;
@@ -236,4 +253,5 @@ main(int argc, char **argv)
            NTHREADS, NCYCLES, max_err, failures);
 
     return (failures == 0) ? 0 : 1;
+#endif
 }

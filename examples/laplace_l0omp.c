@@ -1,8 +1,14 @@
 /*
+ *
+ *  This file is part of MUMPS 5.9.2, released
+ *  on Fri Nov 13 10:00:55 UTC 2026
+ *
+ */
+/*
  * L0-OMP solve probe: a 2-D 5-point Laplacian solved through the C interface
  * with MUMPS' own OpenMP threads (ICNTL(16) = 0, ICNTL(48) = 1 default), so the
  * tree-parallel solve path ([sdcz]sol_omp_m / [sdcz]sol_lr) is exercised.
- * Phase 0 L0-OMP/large-problem regression test: 250x250 five-point Laplacian,
+ * L0-OMP/large-problem regression test: 250x250 five-point Laplacian,
  * 62 500 unknowns, 311 500 nonzeros, ICNTL(16)=0.
  * Prints INFOG(1), the factorization size and the relative residual, so two
  * libraries can be compared on the same run.

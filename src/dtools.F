@@ -11,12 +11,8 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  =============================================================================
-C  Modification for thread safety (Phase 0), 2026-11-17
-C  Author: Dorival Pedroso (Kleo completed the edit)
-C  Nature: removed the now-unused DMUMPS_SET_TMP_PTR helper.
-C          No public interface changed.
-C  =============================================================================
+C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       SUBROUTINE DMUMPS_COMPRESS_LU(SIZE_INPLACE,
      &MYID,N,IOLDPS,TYPE,IW, LIW, A, LA,

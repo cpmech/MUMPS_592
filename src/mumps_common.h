@@ -14,13 +14,8 @@
  *
  */
 /*
- *  ===========================================================================
- *  Modification for thread safety (Phase 0), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: removed the getter/setter declarations for the six process-global
- *          output pointers that [SDCZ]MUMPS_F77 no longer needs, and declared
- *          the process-wide lock protecting the F77 instance table.
- *  ===========================================================================
+ *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+ *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
  */
 #ifndef MUMPS_COMMON_H
 #define MUMPS_COMMON_H
@@ -80,21 +75,31 @@ MUMPS_RCOPY_32TO64_64C_IP_C(float *inouttab, MUMPS_INT8 *sizetab);
 void MUMPS_CALL
 MUMPS_RCOPY_64to32_64C_IP_C(double *inouttab, MUMPS_INT8 *sizetab);
 /*
- * Persistent single-worker dispatcher (Phase 1).  MUMPS_THREAD_SAFE_VERSION
- * is 1.  mumps_ts_dispatch returns 0 once the worker has run the call and
- * -1 when the worker is unavailable; mumps_is_thread_safe is the capability
- * symbol clients can probe.  mumps_ts_dispatch_f77 is the same entry point
- * exposed for the C side, and MUMPS_TS_DISPATCH_F77 follows the compiler
- * symbol convention so that [SDCZ]MUMPS can reach it with a plain EXTERNAL
- * declaration from Fortran.
+ * Persistent single-worker dispatcher.  MUMPS_THREAD_SAFE_VERSION is 1.
+ * mumps_ts_dispatch returns 0 once the worker has run the call and -1 when
+ * the worker is unavailable; mumps_is_thread_safe is the capability symbol
+ * clients can probe.  caller_omp_max is the OpenMP thread count to apply on
+ * the worker for this call (0 leaves the worker's setting alone); it exists
+ * so that ICNTL(16) <= 0 honours a caller's omp_set_num_threads().
+ * mumps_ts_dispatch_f77 is the same entry point exposed for the C side, and
+ * MUMPS_TS_DISPATCH_F77 follows the compiler symbol convention so that
+ * [SDCZ]MUMPS can reach it with a plain EXTERNAL declaration from Fortran.
+ *
+ * MUMPS_TS_DISPATCH_ERROR (-99) is reported in INFO(1)/INFOG(1) when the
+ * dispatcher cannot run the call at all.  It is deliberately outside the
+ * documented negative INFO(1) values (-1, -8, -10, -13, -14, -60, -80, -81,
+ * -800), in particular -9, which means that workarray S is too small.
  */
 #define MUMPS_THREAD_SAFE_VERSION 1
-#define MUMPS_TS_DISPATCH_ERROR (-9)
+#define MUMPS_TS_DISPATCH_ERROR (-99)
 typedef void (*mumps_ts_fn)(void *);
-int mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn);
-int mumps_ts_dispatch_f77(int arith, void *struc, mumps_ts_fn fn);
+int mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn,
+                      int caller_omp_max);
+int MUMPS_CALL mumps_ts_dispatch_f77(int *arith, void *struc, mumps_ts_fn fn,
+                                     int *caller_omp_max);
 #define MUMPS_TS_DISPATCH_F77 \
     F_SYMBOL(ts_dispatch_f77,TS_DISPATCH_F77)
-int MUMPS_TS_DISPATCH_F77(int arith, void *struc, mumps_ts_fn fn);
-int mumps_is_thread_safe(void);
+int MUMPS_TS_DISPATCH_F77(int *arith, void *struc, mumps_ts_fn fn,
+                          int *caller_omp_max);
+int MUMPS_CALL mumps_is_thread_safe(void);
 #endif /* MUMPS_COMMON_H */

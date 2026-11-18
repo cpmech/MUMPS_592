@@ -14,14 +14,8 @@
  *
  */
 /*
- *  ===========================================================================
- *  Modification for thread safety (Phase 1), 2026-11-17
- *  Author: Dorival Pedroso (Kleo completed the edit)
- *  Nature: added the persistent single-worker MUMPS dispatcher and the
- *          mumps_is_thread_safe capability symbol.
- *
- *  MUMPS_THREAD_SAFE_VERSION is 1 (see mumps_common.h as well).
- *  ===========================================================================
+ *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
+ *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
  */
 /*
  * Persistent single-worker dispatcher.
@@ -31,7 +25,8 @@
  * lives on the caller's stack and the caller does not return until the
  * worker has set its "done" flag, so the frame stays alive for the worker.
  * Callers that arrive concurrently queue on the request mutex: exactly one
- * request is outstanding at a time, which is the intended Phase 1 design.
+ * request is outstanding at a time, which is the intended single-worker
+ * design.
  *
  * The worker is created lazily by the first dispatch.  If creation (or the
  * TLS key needed to detect re-entry) fails, the dispatcher becomes
@@ -42,23 +37,49 @@
  *
  * A call made from the worker itself runs inline, so a future nested entry
  * point cannot try to queue behind the worker that is already executing.
+ *
+ * Thread safety needs pthreads.  Windows builds and builds configured with
+ * -DWITHOUT_PTHREAD run every call inline and report 0 from
+ * mumps_is_thread_safe().  MPI builds also run inline: thread safety is
+ * provided only for the sequential libmpiseq builds, because MPI requires
+ * every call on the MPI_Init thread.
  */
 #if defined(__linux__)
 # define _GNU_SOURCE 1
 #endif
-#include <pthread.h>
 #include <stdio.h>
 #include <string.h>
 #include "mumps_common.h"
+
+#if defined(_OPENMP)
+# if defined(__has_include)
+#  if __has_include(<omp.h>)
+#   include <omp.h>
+#  else
+/* Some compilers accept -fopenmp without shipping the runtime header. */
+extern int omp_get_max_threads(void);
+extern void omp_set_num_threads(int);
+#  endif
+# else
+#  include <omp.h>
+# endif
+#endif
+
+#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
+# include <pthread.h>
+#endif
 
 #ifndef MUMPS_THREAD_SAFE_VERSION
 # define MUMPS_THREAD_SAFE_VERSION 1
 #endif
 
+#if ! defined(MUMPS_MPI) && ! defined(MUMPS_WIN32) && \
+    ! defined(WITHOUT_PTHREAD)
 typedef struct mumps_ts_request
 {
     mumps_ts_fn fn;
     void *arg;
+    int caller_omp_max;
     int done;
 } mumps_ts_request;
 
@@ -86,6 +107,34 @@ mumps_ts_report_failure(const char *what, int err)
 }
 
 static void mumps_ts_init(void);
+
+/*
+ * Run one request on the worker.  ICNTL(16) <= 0 means the caller keeps the
+ * OpenMP thread count it configured with omp_set_num_threads(); apply that
+ * count on the worker for the duration of the call and restore the worker's
+ * own setting afterwards.  caller_omp_max == 0 leaves the worker alone.
+ */
+static void
+mumps_ts_run(mumps_ts_fn fn, void *arg, int caller_omp_max)
+{
+#if defined(_OPENMP)
+    if (caller_omp_max > 0)
+      {
+        int saved = omp_get_max_threads();
+        omp_set_num_threads(caller_omp_max);
+        fn(arg);
+        omp_set_num_threads(saved);
+      }
+    else
+      {
+        fn(arg);
+      }
+#else
+    /* Without OpenMP there is no per-thread setting to apply. */
+    (void) caller_omp_max;
+    fn(arg);
+#endif
+}
 
 static void *
 mumps_ts_main(void *unused)
@@ -127,7 +176,7 @@ mumps_ts_main(void *unused)
         req = mumps_ts_slot;
         pthread_mutex_unlock(&mumps_ts_mutex);
 
-        req->fn(req->arg);
+        mumps_ts_run(req->fn, req->arg, req->caller_omp_max);
 
         pthread_mutex_lock(&mumps_ts_mutex);
         req->done = 1;
@@ -167,15 +216,33 @@ mumps_ts_init(void)
     (void) pthread_detach(worker);
     mumps_ts_worker_state = 1;
 }
+#endif /* ! MUMPS_MPI && ! MUMPS_WIN32 && ! WITHOUT_PTHREAD */
 
 int
-mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn)
+mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn, int caller_omp_max)
 {
+#if defined(MUMPS_MPI)
+    /*
+     * Thread safety is provided only for the sequential libmpiseq builds,
+     * because MPI requires every call on the MPI_Init thread.  Run inline
+     * and never create a worker.
+     */
+    (void) arith;
+    (void) caller_omp_max;
+    fn(struc);
+    return 0;
+#elif defined(MUMPS_WIN32) || defined(WITHOUT_PTHREAD)
+    /* Thread safety needs pthreads: run inline and say so at run time. */
+    (void) arith;
+    (void) caller_omp_max;
+    fn(struc);
+    return 0;
+#else
     int err;
 
     /*
-     * arith is accepted for the Phase 2 worker pool, which will key the
-     * worker on the arithmetic; Phase 1 uses one worker for all of them.
+     * arith is accepted for a future worker pool that will key the worker
+     * on the arithmetic; this version uses one worker for all of them.
      */
     (void) arith;
 
@@ -197,7 +264,7 @@ mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn)
      */
     if (pthread_getspecific(mumps_ts_key) != NULL)
       {
-        fn(struc);
+        mumps_ts_run(fn, struc, caller_omp_max);
         return 0;
       }
 
@@ -206,6 +273,7 @@ mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn)
 
         req.fn = fn;
         req.arg = struc;
+        req.caller_omp_max = caller_omp_max;
         req.done = 0;
 
         pthread_mutex_lock(&mumps_ts_mutex);
@@ -225,12 +293,33 @@ mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn)
     }
 
     return 0;
+#endif
 }
 
 int
-mumps_ts_dispatch_f77(int arith, void *struc, mumps_ts_fn fn)
+MUMPS_CALL
+mumps_ts_dispatch_f77(int *arith, void *struc, mumps_ts_fn fn,
+                      int *caller_omp_max)
 {
-    return mumps_ts_dispatch(arith, struc, fn);
+#if defined(MUMPS_MPI)
+    /*
+     * Thread safety is provided only for the sequential libmpiseq builds,
+     * because MPI requires every call on the MPI_Init thread.  Run inline
+     * and never create a worker.
+     */
+    (void) arith;
+    (void) caller_omp_max;
+    fn(struc);
+    return 0;
+#elif defined(MUMPS_WIN32) || defined(WITHOUT_PTHREAD)
+    /* Thread safety needs pthreads: run inline and say so at run time. */
+    (void) arith;
+    (void) caller_omp_max;
+    fn(struc);
+    return 0;
+#else
+    return mumps_ts_dispatch(*arith, struc, fn, *caller_omp_max);
+#endif
 }
 
 /*
@@ -238,16 +327,27 @@ mumps_ts_dispatch_f77(int arith, void *struc, mumps_ts_fn fn)
  * compiler's decoration (a trailing underscore for gfortran/ifort with
  * -DAdd_), which is what a plain EXTERNAL call from [SDCZ]MUMPS expects;
  * calling mumps_ts_dispatch_f77 directly would leave that underscore off
- * and fail to link.
+ * and fail to link.  With no decoration the two names coincide, so the
+ * alias is unnecessary and would be a redefinition.
  */
+#if defined(UPPER) || defined(MUMPS_WIN32) || defined(Add_) || defined(Add__)
 int
-MUMPS_TS_DISPATCH_F77(int arith, void *struc, mumps_ts_fn fn)
+MUMPS_TS_DISPATCH_F77(int *arith, void *struc, mumps_ts_fn fn,
+                      int *caller_omp_max)
 {
-    return mumps_ts_dispatch(arith, struc, fn);
+    return mumps_ts_dispatch_f77(arith, struc, fn, caller_omp_max);
 }
+#endif
 
 int
+MUMPS_CALL
 mumps_is_thread_safe(void)
 {
+#if ! defined(MUMPS_MPI) && ! defined(MUMPS_WIN32) && \
+    ! defined(WITHOUT_PTHREAD)
     return 1;
+#else
+    /* Thread safety needs pthreads, and MPI calls stay on the MPI thread. */
+    return 0;
+#endif
 }

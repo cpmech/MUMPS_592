@@ -54,13 +54,13 @@ laplace_l0omp.o: laplace_l0omp.c
 	  -I$(libdir)/../../include/mumps $(INCS) -c $< $(OUTC)$@
 
 c_thread_safe_test: $$@.o
-	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS) -lpthread
+	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
 
 c_thread_safe_test.o: c_thread_safe_test.c
 	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src \
 	  -I$(libdir)/../../include/mumps $(INCS) -c $< $(OUTC)$@
 
-dorival_thread_safe: $$@.o
+thread_safe_test: $$@.o
 	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
 
 
@@ -90,4 +90,4 @@ c_example_save_restore: $$@.o
 	  -I$(libdir)/../../include/mumps $(INCS) -c $*.c $(OUTC)$*.o
 
 clean:
-	$(RM) *.o [sdcz]simpletest c_example laplace_l0omp multiple_arithmetics_example dorival_thread_safe c_thread_safe_test ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore c_example_save_restore
+	$(RM) *.o [sdcz]simpletest c_example laplace_l0omp multiple_arithmetics_example thread_safe_test c_thread_safe_test ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore c_example_save_restore
