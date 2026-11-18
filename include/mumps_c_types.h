@@ -82,8 +82,9 @@ typedef struct {double r,i;} mumps_double_complex;
  *   1 = calls are dispatched internally to a persistent MUMPS worker.
  *   0 = calls run on the calling thread and the caller must serialize them:
  *       the library was built without pthread support, or for MPI.
- * Consecutive dispatch is active only when MUMPS is built with the
- * sequential MPI stub.  Source-level clients may test
+ * Consecutive dispatch is active only when the mpi.h selected by the build's
+ * include path is the sequential stub (libseq/mpi.h, which defines
+ * MUMPS_MPI_H) rather than a real mpi.h.  Source-level clients may test
  * MUMPS_THREAD_SAFE_VERSION at compile time and mumps_is_thread_safe() at
  * run time. */
 #define MUMPS_THREAD_SAFE_VERSION 1

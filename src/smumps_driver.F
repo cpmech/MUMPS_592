@@ -42,9 +42,6 @@ C     worker; 0 means "leave the worker's OpenMP setting alone".
 !$    IF (id%JOB .NE. -1) THEN
 !$      IF (id%ICNTL(16) .LE. 0) IMAX = OMP_GET_MAX_THREADS()
 !$    END IF
-#if defined(MUMPS_MPI)
-      CALL SMUMPS_TS_INNER( id )
-#else
       IARITH = 1
       STATUS = MUMPS_TS_DISPATCH_F77(IARITH, id, SMUMPS_TS_INNER, IMAX)
       IF (STATUS .NE. 0) THEN
@@ -53,7 +50,6 @@ C     worker; 0 means "leave the worker's OpenMP setting alone".
         id%INFOG(1) = -99
         id%INFOG(2) = 0
       END IF
-#endif
       RETURN
       END SUBROUTINE SMUMPS
 C

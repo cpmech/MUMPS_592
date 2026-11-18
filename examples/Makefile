@@ -43,22 +43,19 @@ zsimpletest:  $$@.o
 c_example: $$@.o
 	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
 
-# dmumps_c.h includes mumps_int_def.h, which `make clean` removes from the
-# build tree, so the installed headers are needed as well.  libdir points at
-# $(PREFIX)/lib/mumps, whose installed headers live in $(PREFIX)/include/mumps.
 laplace_l0omp: $$@.o
 	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
 
 laplace_l0omp.o: laplace_l0omp.c
 	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src \
-	  -I$(libdir)/../../include/mumps $(INCS) -c $< $(OUTC)$@
+	  $(INCS) -c $< $(OUTC)$@
 
 c_thread_safe_test: $$@.o
 	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
 
 c_thread_safe_test.o: c_thread_safe_test.c
 	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src \
-	  -I$(libdir)/../../include/mumps $(INCS) -c $< $(OUTC)$@
+	  $(INCS) -c $< $(OUTC)$@
 
 thread_safe_test: $$@.o
 	$(FL) -o $@ $(OPTL) $@.o $(LIBSDMUMPS) $(LORDERINGS) $(LIBS) $(RPATH_OPT) $(LIBBLAS) $(LIBOTHERS)
@@ -87,7 +84,7 @@ c_example_save_restore: $$@.o
 	$(FC) $(OPTF) -I. -I$(topdir)/include -I$(topdir)/src $(INCS) -c $*.F $(OUTF)$*.o
 .c.o:
 	$(CC) $(OPTC) $(CDEFS) -I. -I$(topdir)/include -I$(topdir)/src \
-	  -I$(libdir)/../../include/mumps $(INCS) -c $*.c $(OUTC)$*.o
+	  $(INCS) -c $*.c $(OUTC)$*.o
 
 clean:
 	$(RM) *.o [sdcz]simpletest c_example laplace_l0omp multiple_arithmetics_example thread_safe_test c_thread_safe_test ssimpletest_save_restore dsimpletest_save_restore csimpletest_save_restore zsimpletest_save_restore c_example_save_restore

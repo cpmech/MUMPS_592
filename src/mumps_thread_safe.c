@@ -40,15 +40,18 @@
  *
  * Thread safety needs pthreads.  Windows builds and builds configured with
  * -DWITHOUT_PTHREAD run every call inline and report 0 from
- * mumps_is_thread_safe().  MPI builds also run inline: thread safety is
+ * mumps_is_thread_safe().  Real MPI builds also run inline: thread safety is
  * provided only for the sequential libmpiseq builds, because MPI requires
- * every call on the MPI_Init thread.
+ * every call on the MPI_Init thread.  Which build this is comes from the
+ * mpi.h that the build's include path selects: only libseq/mpi.h defines
+ * MUMPS_MPI_H, a real mpi.h does not.
  */
 #if defined(__linux__)
 # define _GNU_SOURCE 1
 #endif
 #include <stdio.h>
 #include <string.h>
+#include "mpi.h"
 #include "mumps_common.h"
 
 #if defined(_OPENMP)
@@ -65,7 +68,8 @@ extern void omp_set_num_threads(int);
 # endif
 #endif
 
-#if ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
+#if ! defined(MUMPS_MPI) && defined(MUMPS_MPI_H) && \
+    ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
 # include <pthread.h>
 #endif
 
@@ -73,8 +77,8 @@ extern void omp_set_num_threads(int);
 # define MUMPS_THREAD_SAFE_VERSION 1
 #endif
 
-#if ! defined(MUMPS_MPI) && ! defined(MUMPS_WIN32) && \
-    ! defined(WITHOUT_PTHREAD)
+#if ! defined(MUMPS_MPI) && defined(MUMPS_MPI_H) && \
+    ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
 typedef struct mumps_ts_request
 {
     mumps_ts_fn fn;
@@ -216,16 +220,20 @@ mumps_ts_init(void)
     (void) pthread_detach(worker);
     mumps_ts_worker_state = 1;
 }
-#endif /* ! MUMPS_MPI && ! MUMPS_WIN32 && ! WITHOUT_PTHREAD */
+#endif /* ! MUMPS_MPI && MUMPS_MPI_H && ! MUMPS_WIN32 &&
+          ! WITHOUT_PTHREAD */
 
 int
 mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn, int caller_omp_max)
 {
-#if defined(MUMPS_MPI)
+#if defined(MUMPS_MPI) || ! defined(MUMPS_MPI_H)
     /*
-     * Thread safety is provided only for the sequential libmpiseq builds,
-     * because MPI requires every call on the MPI_Init thread.  Run inline
-     * and never create a worker.
+     * A real MPI build must keep every call on the thread that called
+     * MPI_Init (MPI_THREAD_SINGLE/MPI_THREAD_FUNNELED).  The header that the
+     * build's include path selects is what tells us which build this is:
+     * libseq/mpi.h defines MUMPS_MPI_H and a real mpi.h does not, while
+     * -DMUMPS_MPI remains an explicit override.  Run inline and never create
+     * a worker.
      */
     (void) arith;
     (void) caller_omp_max;
@@ -301,11 +309,14 @@ MUMPS_CALL
 mumps_ts_dispatch_f77(int *arith, void *struc, mumps_ts_fn fn,
                       int *caller_omp_max)
 {
-#if defined(MUMPS_MPI)
+#if defined(MUMPS_MPI) || ! defined(MUMPS_MPI_H)
     /*
-     * Thread safety is provided only for the sequential libmpiseq builds,
-     * because MPI requires every call on the MPI_Init thread.  Run inline
-     * and never create a worker.
+     * A real MPI build must keep every call on the thread that called
+     * MPI_Init (MPI_THREAD_SINGLE/MPI_THREAD_FUNNELED).  The header that the
+     * build's include path selects is what tells us which build this is:
+     * libseq/mpi.h defines MUMPS_MPI_H and a real mpi.h does not, while
+     * -DMUMPS_MPI remains an explicit override.  Run inline and never create
+     * a worker.
      */
     (void) arith;
     (void) caller_omp_max;
@@ -343,8 +354,8 @@ int
 MUMPS_CALL
 mumps_is_thread_safe(void)
 {
-#if ! defined(MUMPS_MPI) && ! defined(MUMPS_WIN32) && \
-    ! defined(WITHOUT_PTHREAD)
+#if ! defined(MUMPS_MPI) && defined(MUMPS_MPI_H) && \
+    ! defined(MUMPS_WIN32) && ! defined(WITHOUT_PTHREAD)
     return 1;
 #else
     /* Thread safety needs pthreads, and MPI calls stay on the MPI thread. */

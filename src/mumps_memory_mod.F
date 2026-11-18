@@ -832,7 +832,7 @@ C     mismatch cannot occur.
                   INFO(1:2) = ERRTPL
                   RETURN
                ELSE
-                  IF(present(MEMCNT))MEMCNT = MEMCNT+int(MINSIZE,8)*16_8
+                  IF(present(MEMCNT))MEMCNT = MEMCNT+int(MINSIZE,8)*ZSIZE
                END IF
                DO I=1, min(size(ARRAY), MINSIZE)
                   TEMP(I) = ARRAY(I)
