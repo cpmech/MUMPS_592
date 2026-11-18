@@ -37,10 +37,11 @@ C                    parallelism has to be off; 8 nested-in-1 deadlocks in
 C                    dmumps_fac_omp_m) and 0, the OpenMP default, with
 C                    nested = 1
 C
-C  Build: this example needs an OpenMP-enabled compiler and is part of the `d`
-C  target.  A platform makefile that builds MUMPS without -fopenmp (macOS, with
-C  Accelerate) would fail the link on omp_get_thread_num and friends; build it
-C  alone there, after the libraries exist:
+C  Build: this example needs an OpenMP-enabled compiler and is NOT part of the
+C  `make d` target: a broken example must not stop the library build, and a
+C  platform makefile that compiles MUMPS without -fopenmp (macOS, with
+C  Accelerate) cannot link omp_get_thread_num and friends.  On a machine whose
+C  toolchain has OpenMP, build it on demand once the libraries exist:
 C
 C     make dshared && make thread_safe_test
 C
