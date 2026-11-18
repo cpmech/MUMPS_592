@@ -226,6 +226,10 @@ mumps_ts_init(void)
 int
 mumps_ts_dispatch(int arith, void *struc, mumps_ts_fn fn, int caller_omp_max)
 {
+#if defined(MUMPS_MPI_H)
+    /* Only to keep -Wunused-variable quiet for libseq's static MPI_COMM_WORLD. */
+    (void) MPI_COMM_WORLD;
+#endif
 #if defined(MUMPS_MPI) || ! defined(MUMPS_MPI_H)
     /*
      * A real MPI build must keep every call on the thread that called
