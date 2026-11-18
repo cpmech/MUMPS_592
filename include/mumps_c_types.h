@@ -13,10 +13,6 @@
  *  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
  *
  */
-/*
- *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
- *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
- */
 
 
 #ifndef MUMPS_C_TYPES_H

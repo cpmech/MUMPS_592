@@ -11,8 +11,6 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
-C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       SUBROUTINE DMUMPS_F77( JOB, SYM, PAR, COMM_F77, N, NBLK, ICNTL,
      &     CNTL, KEEP, DKEEP, KEEP8, NZ, NNZ, IRN, IRNhere, JCN,

@@ -14,10 +14,6 @@
  *
  */
 /*
- *  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
- *  accompanying cover letter.  The CeCILL-C notice above is unchanged.
- */
-/*
  * Persistent single-worker dispatcher.
  *
  * The C entry points of every arithmetic ([sdcz]mumps_c) hand their whole

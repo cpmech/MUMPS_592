@@ -11,8 +11,6 @@ C  released under the CeCILL-C license
 C  (see doc/CeCILL-C_V1-en.txt, doc/CeCILL-C_V1-fr.txt, and
 C  https://cecill.info/licences/Licence_CeCILL-C_V1-en.html)
 C
-C  Modified 2026-11-18 by Dorival Pedroso: thread-safe entry points, per the
-C  accompanying cover letter.  The CeCILL-C notice above is unchanged.
 C
       MODULE SMUMPS_SOL_L0OMP_M
       CONTAINS
