@@ -37,10 +37,10 @@ C                    parallelism has to be off; 8 nested-in-1 deadlocks in
 C                    dmumps_fac_omp_m) and 0, the OpenMP default, with
 C                    nested = 1
 C
-C  Build: this example needs an OpenMP-enabled compiler and is therefore NOT built
-C  by `make d` -- some platform makefiles (macOS, with Accelerate) build MUMPS
-C  without -fopenmp, and the link then fails on omp_get_thread_num and friends.
-C  Build it on demand where OpenMP is available, after the libraries exist:
+C  Build: this example needs an OpenMP-enabled compiler and is part of the `d`
+C  target.  A platform makefile that builds MUMPS without -fopenmp (macOS, with
+C  Accelerate) would fail the link on omp_get_thread_num and friends; build it
+C  alone there, after the libraries exist:
 C
 C     make dshared && make thread_safe_test
 C
@@ -170,7 +170,11 @@ C-----------------------------------------------------------------------
       SUBROUTINE WORKER(T, N, NITER, LOCKED, MTH, EMAX, NF)
       IMPLICIT NONE
       INCLUDE 'dmumps_struc.h'
-      INTEGER T, N, NITER, LOCKED, MTH, NF
+C     T is the value of OMP_GET_THREAD_NUM(), i.e. omp_integer_kind (4
+C     bytes) even when this file is compiled with -i8; a default INTEGER
+C     dummy would read 8 bytes from the 4-byte actual argument.
+      INTEGER(4) T
+      INTEGER N, NITER, LOCKED, MTH, NF
       DOUBLE PRECISION EMAX(*)
       TYPE(DMUMPS_STRUC) ID
       INTEGER K, JOBFAIL, NFAIL
@@ -213,7 +217,8 @@ C-----------------------------------------------------------------------
       IMPLICIT NONE
       INCLUDE 'mpif.h'
       INCLUDE 'dmumps_struc.h'
-      INTEGER T, K, N, MTH, LOCKED, JOBFAIL
+      INTEGER(4) T
+      INTEGER K, N, MTH, LOCKED, JOBFAIL
       TYPE(DMUMPS_STRUC) ID
       DOUBLE PRECISION ERR
       INTEGER I, J, NNZ, ISTAT
@@ -337,7 +342,8 @@ C  REPORT: a MUMPS error return, printed one line at a time
 C-----------------------------------------------------------------------
       SUBROUTINE REPORT(T, K, JOB, INFO)
       IMPLICIT NONE
-      INTEGER T, K, JOB, INFO
+      INTEGER(4) T
+      INTEGER K, JOB, INFO
 !$OMP CRITICAL(IO)
       WRITE(6,'(A,I3,A,I4,A,I3,A,I9)') ' thread ', T, ' cycle ', K,
      &    ' JOB ', JOB, ' failed, INFOG(1) = ', INFO
@@ -349,7 +355,8 @@ C  REPORT2: a wrong solution, printed one line at a time
 C-----------------------------------------------------------------------
       SUBROUTINE REPORT2(T, K, ERR)
       IMPLICIT NONE
-      INTEGER T, K
+      INTEGER(4) T
+      INTEGER K
       DOUBLE PRECISION ERR
 !$OMP CRITICAL(IO)
       WRITE(6,'(A,I3,A,I4,A,ES12.4)') ' thread ', T, ' cycle ', K,

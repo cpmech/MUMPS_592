@@ -15,7 +15,7 @@ all:	c z s d multi
 c:	csimpletest csimpletest_save_restore
 z:	zsimpletest zsimpletest_save_restore
 s:	ssimpletest ssimpletest_save_restore
-d:	dsimpletest dsimpletest_save_restore c_example_save_restore c_example laplace_l0omp c_thread_safe_test
+d:	dsimpletest dsimpletest_save_restore c_example_save_restore c_example laplace_l0omp c_thread_safe_test thread_safe_test
 multi:	multiple_arithmetics_example
 
 
